@@ -126,6 +126,7 @@ func _valid_point(L: LevelLayout, p: Vector3) -> bool:
 	for box in L.obstacles:
 		var b: AABB = box
 		if p.x > b.position.x and p.x < b.end.x and p.z > b.position.z and p.z < b.end.z:
-			if p.y < b.end.y - 0.03:
+			# vertical range matters: a floor item under a raised obstacle (desk-top PC) is fine
+			if p.y < b.end.y - 0.03 and p.y > b.position.y + 0.03:
 				return false
 	return true

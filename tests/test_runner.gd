@@ -16,6 +16,8 @@ func _ready() -> void:
 		"scripts": preload("res://tests/suite_scripts.gd"),
 		"levels": preload("res://tests/suite_levels.gd"),
 		"gameplay": preload("res://tests/suite_gameplay.gd"),
+		"sweep": preload("res://tests/suite_sweep.gd"),
+		"reg_misc": preload("res://tests/reg_misc.gd"),
 	}
 	for name in suites:
 		if suite != "all" and suite != name:
