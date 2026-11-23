@@ -207,8 +207,8 @@ FPS/draw-call counter (F3 or Settings).
   Medium if the store dips below 60 FPS.
 * First launch paints and caches cover art: the first load of each level takes a few seconds
   longer; the first inspect of an item can hitch briefly while its 528 px cover renders.
-* Carts are pushed kinematically: they stop at walls and shelves and slide along them, but a
-  cart still pushes through nothing (no cart-vs-item or cart-vs-player collision).
+* Carts are pushed kinematically: they stop at walls and shelves and slide along them, but they
+  do not collide with loose items or other players.
 * "Ragdoll" slips are a procedural tumble (camera roll + bean tipping over), not a bone ragdoll.
 * Internet play needs a relay that isn't included (see "Adding an internet relay later").
 * The APK is signed with a debug key (fine for sideloading, not for the Play Store).
