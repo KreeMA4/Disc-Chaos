@@ -16,8 +16,10 @@ var MAX_ACTIVE := 90
 var st: LevelState
 var is_host := true
 var players: Array = []          # Array[Vector3] positions used for activation (host)
-var _chunks := {}                # Vector2i -> {rkey -> MultiMeshInstance3D}
+var _chunks := {}                # Vector2i -> {rkey -> MultiMeshInstance3D}  (the near/high-detail one)
 var _mm_uids := {}               # MultiMeshInstance3D -> Array[int]
+var _lod := {}                   # high MMI -> low-detail MMI drawn beyond LOD_DIST
+const LOD_DIST := 9.0
 var _slot := {}                  # uid -> [mmi, index]
 var _dirty := {}
 var _anim := {}                  # uid -> {from: Transform3D, t: float}
@@ -101,7 +103,7 @@ func _wants_static(uid: int) -> bool:
 	var r := st.root_of(uid)
 	if r != uid:
 		var ri: LevelState.Item = st.items[r]
-		if ri.active or ri.holder != 0 or ri.kind == Defs.K_CART and false:
+		if ri.active or (ri.holder != 0 and ri.kind != Defs.K_CART):
 			return false
 	return true
 
@@ -122,13 +124,41 @@ func _refresh(uid: int) -> void:
 		if not _slot.has(uid):
 			_add(uid, mmi)
 		var idx: int = _slot[uid][1]
-		mmi.multimesh.set_instance_transform(idx, xf)
-		mmi.multimesh.set_instance_custom_data(idx, Covers.item_custom(st, it))
-		mmi.multimesh.set_instance_color(idx, Covers.item_plastic(st, it))
+		_set_inst(mmi, idx, xf, Covers.item_custom(st, it), Covers.item_plastic(st, it))
 	else:
 		_remove(uid)
 	for c in it.contents:
 		_refresh(c)
+
+func _set_inst(mmi: MultiMeshInstance3D, idx: int, xf: Transform3D, custom: Color, col: Color) -> void:
+	for m in [mmi, _lod.get(mmi)]:
+		if m == null:
+			continue
+		var mm: MultiMesh = m.multimesh
+		mm.set_instance_transform(idx, xf)
+		mm.set_instance_custom_data(idx, custom)
+		mm.set_instance_color(idx, col)
+
+func _set_count(mmi: MultiMeshInstance3D, n: int) -> void:
+	mmi.multimesh.visible_instance_count = n
+	if _lod.has(mmi):
+		_lod[mmi].multimesh.visible_instance_count = n
+
+func _new_mmi(mesh: Mesh, kind: int, name: String) -> MultiMeshInstance3D:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.use_custom_data = true
+	mm.mesh = mesh
+	mm.instance_count = START_CAP
+	mm.visible_instance_count = 0
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = Covers.mm_mats[Covers.mode_for(kind)]
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _shadows and kind != Defs.K_DISC else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mmi.name = name
+	add_child(mmi)
+	return mmi
 
 func _get_mmi(chunk: Vector2i, key: String, kind: int) -> MultiMeshInstance3D:
 	if not _chunks.has(chunk):
@@ -136,21 +166,21 @@ func _get_mmi(chunk: Vector2i, key: String, kind: int) -> MultiMeshInstance3D:
 	var d: Dictionary = _chunks[chunk]
 	if d.has(key):
 		return d[key]
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.use_custom_data = true
-	mm.mesh = ItemMeshes.mesh(key)
-	mm.instance_count = START_CAP
-	mm.visible_instance_count = 0
-	var mmi := MultiMeshInstance3D.new()
-	mmi.multimesh = mm
-	mmi.material_override = Covers.mm_mats[Covers.mode_for(kind)]
-	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if _shadows and kind != Defs.K_DISC else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mmi.visibility_range_end = _vis_range
-	mmi.visibility_range_end_margin = 2.0
-	mmi.name = "MM_%d_%d_%s" % [chunk.x, chunk.y, key]
-	add_child(mmi)
+	var mmi := _new_mmi(ItemMeshes.mesh(key), kind, "MM_%d_%d_%s" % [chunk.x, chunk.y, key])
+	var lo_mesh := ItemMeshes.mesh_lod(key)
+	if lo_mesh != mmi.multimesh.mesh:
+		var lo := _new_mmi(lo_mesh, kind, mmi.name + "_lod")
+		mmi.visibility_range_end = LOD_DIST
+		mmi.visibility_range_end_margin = 0.5
+		lo.visibility_range_begin = LOD_DIST
+		lo.visibility_range_begin_margin = 0.5
+		lo.visibility_range_end = _vis_range
+		lo.visibility_range_end_margin = 2.0
+		lo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_lod[mmi] = lo
+	else:
+		mmi.visibility_range_end = _vis_range
+		mmi.visibility_range_end_margin = 2.0
 	d[key] = mmi
 	_mm_uids[mmi] = []
 	return mmi
@@ -168,13 +198,13 @@ func _add(uid: int, mmi: MultiMeshInstance3D) -> void:
 			cds.append(mm.get_instance_custom_data(i))
 			cols.append(mm.get_instance_color(i))
 		mm.instance_count = mm.instance_count * 2
+		if _lod.has(mmi):
+			_lod[mmi].multimesh.instance_count = mm.instance_count
 		for i in arr.size():
-			mm.set_instance_transform(i, xfs[i])
-			mm.set_instance_custom_data(i, cds[i])
-			mm.set_instance_color(i, cols[i])
+			_set_inst(mmi, i, xfs[i], cds[i], cols[i])
 	arr.append(uid)
 	_slot[uid] = [mmi, arr.size() - 1]
-	mm.visible_instance_count = arr.size()
+	_set_count(mmi, arr.size())
 
 func _remove(uid: int) -> void:
 	if not _slot.has(uid):
@@ -187,12 +217,10 @@ func _remove(uid: int) -> void:
 	if idx != last:
 		var moved: int = arr[last]
 		arr[idx] = moved
-		mm.set_instance_transform(idx, mm.get_instance_transform(last))
-		mm.set_instance_custom_data(idx, mm.get_instance_custom_data(last))
-		mm.set_instance_color(idx, mm.get_instance_color(last))
+		_set_inst(mmi, idx, mm.get_instance_transform(last), mm.get_instance_custom_data(last), mm.get_instance_color(last))
 		_slot[moved] = [mmi, idx]
 	arr.pop_back()
-	mm.visible_instance_count = arr.size()
+	_set_count(mmi, arr.size())
 	_slot.erase(uid)
 
 func static_instance_count() -> int:

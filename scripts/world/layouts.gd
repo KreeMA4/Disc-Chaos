@@ -2,7 +2,7 @@ class_name Layouts
 extends RefCounted
 ## Hand-designed level layouts with seeded decorative variation.
 
-const IMPLEMENTED := ["bedroom", "living", "basement", "attic"]
+const IMPLEMENTED := ["bedroom", "living", "basement", "attic", "store", "warehouse"]
 
 static func build(def: Dictionary, seed: int) -> LevelLayout:
 	var L := LevelLayout.new()
@@ -32,6 +32,12 @@ static func clutter(L: LevelLayout, rng: RandomNumberGenerator, n: int, types :=
 	for i in n:
 		var p := L.random_floor_point(rng, 0.3)
 		if p == Vector3.INF:
+			continue
+		var near_spawn := false
+		for sp in L.spawns:
+			if Vector2(p.x - sp.x, p.z - sp.z).length() < 1.3:
+				near_spawn = true
+		if near_spawn:
 			continue
 		var t: String = types[rng.randi() % types.size()]
 		var params := {}
@@ -341,8 +347,169 @@ static func _attic(L: LevelLayout, rng: RandomNumberGenerator) -> void:
 	clutter(L, rng, 30, ["snack", "soda", "books", "laundry", "cable", "cushion", "books"])
 	surface_clutter(L, rng, 6)
 
-static func _store(L: LevelLayout, rng: RandomNumberGenerator) -> void:
-	_bedroom(L, rng)
+# ------------------------------------------------------------------ 5. Level Up Loot (game store)
+static func _aisle(L: LevelLayout, x: float, z0: float, units: int, type := "case_shelf") -> void:
+	var u: Dictionary = ShelfPlanner.UNITS[type]
+	var half: float = u.depth * 0.5 + 0.015
+	for i in units:
+		L.add_shelf_slot(Vector3(x - half, 0, z0 + i * (u.width + 0.02) + u.width * 0.5), -90, type)
+	for i in units:
+		L.add_shelf_slot(Vector3(x + half, 0, z0 + i * (u.width + 0.02) + u.width * 0.5), 90, type)
 
+static func _store(L: LevelLayout, rng: RandomNumberGenerator) -> void:
+	var back := Rect2(0, 0, 26, 6.5)
+	var floor := Rect2(0, 6.5, 26, 16)
+	var a := L.add_room("Backroom", back, 3.0, "concrete", Color(0.78, 0.8, 0.84), Color(0.85, 0.85, 0.87))
+	L.rooms[a].wall_style = "bare"
+	var b := L.add_room("Level Up Loot", floor, 3.4, "tile", Color(0.99, 0.78, 0.55), Color(0.97, 0.95, 0.92))
+	L.rooms[b].tile_a = Color(0.95, 0.88, 0.74)
+	L.rooms[b].tile_b = Color(0.45, 0.72, 0.76)
+	L.rooms[b].wall_style = "stripes"
+	L.rooms[b].trim = Color(1.0, 0.55, 0.3)
+	L.add_door(Vector2(4.0, 6.5), 1.6, 2.2)
+	L.add_door(Vector2(22.0, 6.5), 1.6, 2.2)
+	L.add_window(Vector2(4.5, 22.5), 6.0, 2.3, 0.35)
+	L.add_window(Vector2(13.0, 22.5), 2.6, 2.5, 0.05)
+	L.add_window(Vector2(21.5, 22.5), 6.0, 2.3, 0.35)
+	L.env.ambient = Color(1.0, 0.9, 0.82)
+	L.env.ambient_energy = 0.5
+	L.env.sun_energy = 0.85
+	# --- shelving, by zone (order matters: the planner fills zones in this order)
+	L.zone = "new"
+	L.shelf_run(floor, "w", 1.0, 5, "case_shelf")
+	L.zone = "aisle"
+	_aisle(L, 7.0, 8.6, 3)
+	_aisle(L, 11.2, 8.6, 3)
+	_aisle(L, 15.4, 8.6, 3)
+	L.zone = "retro"
+	L.shelf_run(floor, "e", 0.9, 4, "tall_shelf")
+	L.shelf_run(floor, "e", 6.0, 3, "case_shelf")
+	L.zone = "preowned"
+	L.shelf_run(floor, "n", 6.0, 3, "case_shelf")
+	L.zone = "ce"
+	L.shelf_run(floor, "n", 10.3, 6, "cabinet")
+	L.zone = ""
+	# --- signage
+	L.add_prop("neon_sign", Vector3(0.06, 2.75, 10.6), 90, {"color": Color(1.0, 0.35, 0.45)})
+	label(L, Vector3(0.1, 2.75, 10.6), 90, "NEW RELEASES", 90, Color(1.0, 0.85, 0.9))
+	L.add_prop("neon_sign", Vector3(25.94, 2.75, 11.2), -90, {"color": Color(0.4, 1.0, 0.6)})
+	label(L, Vector3(25.9, 2.75, 11.2), -90, "RETRO ZONE", 90, Color(0.8, 1.0, 0.85))
+	L.add_prop("neon_sign", Vector3(7.9, 2.75, 6.56), 0, {"color": Color(1.0, 0.7, 0.25)})
+	label(L, Vector3(7.9, 2.75, 6.6), 0, "PRE-OWNED", 90, Color(1.0, 0.92, 0.7))
+	L.add_prop("neon_sign", Vector3(14.3, 2.75, 6.56), 0, {"color": Color(0.9, 0.75, 0.35)})
+	label(L, Vector3(14.3, 2.75, 6.6), 0, "COLLECTOR'S VAULT", 80, Color(1.0, 0.95, 0.75))
+	L.add_prop("neon_sign", Vector3(13.0, 2.95, 22.44), 180, {"color": Color(0.35, 0.8, 1.0)})
+	label(L, Vector3(13.0, 2.95, 22.4), 180, "LEVEL UP LOOT", 110, Color(0.85, 0.97, 1.0))
+	# --- front of store
+	L.add_prop("window_display", Vector3(4.5, 0, 21.95), 180)
+	L.add_prop("window_display", Vector3(21.5, 0, 21.95), 180)
+	L.add_prop("checkout", Vector3(20.0, 0, 19.3), 0)
+	L.add_prop("monitor", Vector3(19.3, 1.02, 19.2), 180)
+	L.add_prop("kiosk", Vector3(3.0, 0, 18.6), 0, {"color": Color(0.3, 0.75, 0.95)})
+	L.add_prop("kiosk", Vector3(4.6, 0, 18.6), 0, {"color": Color(1.0, 0.45, 0.6)})
+	L.add_prop("kiosk", Vector3(6.2, 0, 18.6), 0, {"color": Color(0.55, 0.85, 0.35)})
+	L.add_stash("bargain_bin", Vector3(10.6, 0, 18.4), 0)
+	L.add_stash("bargain_bin", Vector3(15.4, 0, 18.4), 0)
+	L.add_prop("display_table", Vector3(13.0, 0, 16.0), 0, {"color": Color(1.0, 0.55, 0.3)})
+	L.add_prop("display_table", Vector3(20.5, 0, 15.6), 90, {"color": Color(0.55, 0.45, 0.95)})
+	L.add_prop("cart_return", Vector3(9.0, 0, 22.2), 180)
+	L.add_prop("plant_big", Vector3(11.0, 0, 21.9), 0)
+	L.add_prop("plant_big", Vector3(15.0, 0, 21.9), 0)
+	L.add_prop("arcade", Vector3(24.9, 0, 19.6), -90, {"color": Color(0.95, 0.35, 0.35)})
+	L.add_prop("arcade", Vector3(24.9, 0, 20.5), -90, {"color": Color(0.35, 0.55, 0.95)})
+	L.add_prop("shopping_basket", Vector3(18.6, 0, 20.6), 20)
+	L.add_prop("mirror_frame", Vector3(0.08, 0, 20.2), 90, {"color": Color(1.0, 0.55, 0.3)})
+	L.mirror = {"pos": Vector3(0.12, 0.95, 20.2), "yaw": deg_to_rad(90), "size": Vector2(0.8, 1.8)}
+	L.add_sort_table(Vector3(13.0, 0, 13.6), 0)
+	L.add_sort_table(Vector3(20.6, 0, 12.0), 90)
+	L.add_cart(Vector3(12.0, 0, 20.4), 0)
+	L.add_cart(Vector3(14.0, 0, 20.4), 0)
+	L.add_cart(Vector3(19.6, 0, 9.3), 90)
+	for i in 4:
+		poster(L, Vector3(1.8 + i * 1.0, 2.35, 22.46), 180, 0.55, 0.8, rng)
+	poster(L, Vector3(25.96, 1.9, 18.0), -90, 0.6, 0.85, rng)
+	poster(L, Vector3(0.04, 1.9, 16.5), 90, 0.6, 0.85, rng)
+	poster(L, Vector3(0.04, 1.9, 17.6), 90, 0.6, 0.85, rng)
+	for x in [4.0, 9.0, 13.0, 17.0, 22.0]:
+		for z in [9.5, 14.0, 18.5]:
+			L.add_prop("panel_light", Vector3(x, 3.36, z), 0)
+	for x in [5.0, 13.0, 21.0]:
+		for z in [10.0, 17.5]:
+			L.add_light(Vector3(x, 3.0, z), Color(1.0, 0.95, 0.88), 1.2, 9.0)
+	# --- backroom: delivery boxes to unpack
+	for p in [Vector3(2.4, 0, 1.6), Vector3(5.6, 0, 4.4), Vector3(8.4, 0, 1.4), Vector3(11.0, 0, 4.0), Vector3(14.4, 0, 1.6), Vector3(17.4, 0, 4.4), Vector3(20.2, 0, 1.5), Vector3(24.0, 0, 3.6)]:
+		L.add_stash("delivery_box", p, rng.randf_range(-15, 15))
+	L.add_prop("pallet", Vector3(3.0, 0, 5.6), 0)
+	L.add_prop("crate_stack", Vector3(2.7, 0.15, 5.6), 10)
+	L.add_prop("crate_stack", Vector3(3.4, 0.15, 5.6), -5)
+	L.add_prop("pallet", Vector3(12.8, 0, 0.7), 0)
+	L.add_prop("crate_stack", Vector3(12.5, 0.15, 0.7), 0)
+	L.add_prop("cardboard_box", Vector3(13.2, 0.15, 0.7), 8, {"size": Vector3(0.55, 0.45, 0.5)})
+	L.add_prop("workbench", Vector3(18.0, 0, 0.45), 0)
+	L.add_prop("pallet", Vector3(22.8, 0, 5.6), 90)
+	L.add_prop("crate_stack", Vector3(22.8, 0.15, 5.4), 30)
+	L.add_prop("fan", Vector3(25.5, 0, 0.5), 0)
+	L.add_cart(Vector3(9.0, 0, 5.4), 90)
+	for x in [4.0, 10.0, 16.0, 22.0]:
+		L.add_prop("ceiling_lamp", Vector3(x, 2.65, 3.2), 0)
+	L.add_light(Vector3(7.0, 2.4, 3.2), Color(1.0, 0.92, 0.8), 1.0, 8.0)
+	L.add_light(Vector3(19.0, 2.4, 3.2), Color(1.0, 0.92, 0.8), 1.0, 8.0)
+	L.spawns = [Vector3(13.0, 0, 20.6), Vector3(12.2, 0, 21.4), Vector3(13.8, 0, 21.4), Vector3(13.0, 0, 19.5)]
+	clutter(L, rng, 60, ["snack", "soda", "pizza_box", "cable", "controller", "headphones", "shopping_basket", "soda"])
+	surface_clutter(L, rng, 10)
+
+# ------------------------------------------------------------------ 6. warehouse / endless
 static func _warehouse(L: LevelLayout, rng: RandomNumberGenerator, def: Dictionary) -> void:
-	_bedroom(L, rng)
+	var items: int = def.target_items
+	var products := items / 2.2
+	var n_case := int(ceil(products * 0.75 * 0.034 * 1.6 / 5.0)) + 2
+	var n_tall := int(ceil(products * 0.25 * 0.07 * 1.6 / 4.0)) + 1
+	var n_cab := int(ceil(products * 0.12 * 0.22 * 1.6 / 4.0)) + 1
+	var per_side := 4
+	var types: Array = []
+	for i in n_case: types.append("case_shelf")
+	for i in n_tall: types.append("tall_shelf")
+	for i in n_cab: types.append("cabinet")
+	var aisles := int(ceil(types.size() / float(per_side * 2)))
+	var W := 6.0 + aisles * 3.4
+	var D := per_side * 1.22 + 9.0
+	var hall := Rect2(0, 0, W, D)
+	var a := L.add_room("Warehouse", hall, 4.6, "concrete", Color(0.72, 0.76, 0.82), Color(0.7, 0.72, 0.76))
+	L.rooms[a].wall_style = "bare"
+	L.rooms[a].trim = Color(0.95, 0.75, 0.2)
+	L.add_window(Vector2(W * 0.5, 0.0), 3.0, 1.0, 3.0)
+	L.env.ambient = Color(0.92, 0.95, 1.0)
+	L.env.ambient_energy = 0.55
+	var ti := 0
+	for ai in aisles:
+		var x := 4.0 + ai * 3.4
+		for side in [-1.0, 1.0]:
+			for k in per_side:
+				if ti >= types.size():
+					break
+				var t: String = types[ti]
+				var u: Dictionary = ShelfPlanner.UNITS[t]
+				var half: float = u.depth * 0.5 + 0.015
+				L.add_shelf_slot(Vector3(x + side * half, 0, 3.5 + k * 1.22 + 0.6), 90.0 * side, t)
+				ti += 1
+		L.add_prop("panel_light", Vector3(x, 4.55, D * 0.5), 90)
+		L.add_light(Vector3(x, 4.0, D * 0.45), Color(1.0, 0.96, 0.9), 1.3, 10.0)
+	# loading area at the front
+	var boxes := clampi(items / 110, 3, 14)
+	for i in boxes:
+		var p := Vector3(1.6 + (i % 7) * (W - 3.2) / 6.0, 0, D - 1.2 - (i / 7) * 1.5)
+		L.add_stash("delivery_box", p, rng.randf_range(-20, 20))
+	for i in 3:
+		L.add_prop("pallet", Vector3(1.2 + i * 1.6, 0, 1.0), 0)
+		L.add_prop("crate_stack", Vector3(1.2 + i * 1.6, 0.15, 1.0), rng.randf() * 30)
+	L.add_sort_table(Vector3(W * 0.5 - 1.0, 0, D - 3.6), 0)
+	L.add_sort_table(Vector3(W * 0.5 + 1.4, 0, D - 3.6), 0)
+	L.add_cart(Vector3(W * 0.5 - 2.6, 0, D - 4.6), 0)
+	L.add_cart(Vector3(W * 0.5 + 3.0, 0, D - 4.6), 0)
+	L.add_cart(Vector3(W - 1.2, 0, 1.6), 90)
+	L.add_prop("neon_sign", Vector3(W * 0.5, 3.6, 0.06), 0, {"color": Color(1.0, 0.75, 0.25)})
+	label(L, Vector3(W * 0.5, 3.6, 0.1), 0, "WAREHOUSE", 110, Color(1.0, 0.95, 0.7))
+	L.add_prop("mirror_frame", Vector3(0.08, 0, D - 2.5), 90, {"color": Color(0.95, 0.75, 0.2)})
+	L.mirror = {"pos": Vector3(0.12, 0.95, D - 2.5), "yaw": deg_to_rad(90), "size": Vector2(0.8, 1.8)}
+	L.spawns = [Vector3(W * 0.5, 0, D - 4.9), Vector3(W * 0.5 - 0.8, 0, D - 4.9), Vector3(W * 0.5 + 0.8, 0, D - 4.9), Vector3(W * 0.5 + 0.2, 0, D - 5.5)]
+	clutter(L, rng, int(W * D / 12.0), ["pizza_box", "snack", "soda", "cable", "crate_stack"])

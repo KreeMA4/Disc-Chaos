@@ -422,7 +422,7 @@ static func build(k: MeshKit, type: String, xf: Transform3D, p: Dictionary, rng:
 			for i in 6:
 				var bw := rng.randf_range(0.03, 0.06)
 				var bh := rng.randf_range(0.18, 0.25)
-				k.box("toon", _t(xf, x + bw * 0.5, bh * 0.5, 0), Vector3(bw, bh, 0.17), Color.from_hsv(rng.randf(), 0.5, 0.75), 0.004)
+				k.box("toon", _t(xf, x + bw * 0.5, bh * 0.5, 0), Vector3(bw, bh, 0.17), Color.from_hsv(rng.randf(), 0.5, 0.75), 0.0)
 				x += bw + 0.003
 		"ceiling_lamp":
 			k.cylinder("toon", _t(xf, 0, 0.15, 0), 0.008, 0.3, DARK, 4)

@@ -1,5 +1,21 @@
 # Changelog
 
+### v0.4
+The store, endless mode and carts.
+- Level 5 "Level Up Loot": a full fictional game store with ~1,550 items: storefront windows,
+  New Releases wall (newest titles get their own section), double-sided platform aisles, Retro
+  Zone (long boxes, big boxes, jewel cases), Pre-Owned & Golden Greats wall, Collector's Vault
+  glass cabinets, bargain bins (hidden items), checkout counter, demo kiosks, arcade machines and
+  a backroom with 8 delivery boxes to unpack. Estimated 4-player time ~50–60 min.
+- Warehouse (Endless) mode: random platforms and a random mess every time, adjustable item
+  count (100–2,000); the hall, aisles and loading bay are sized from the item count.
+- Push carts: push with Interact, load up to 30 items, take items back out; synced in co-op.
+- Bonus cosmetics unlock from total stars (crown, halo, disc hat, jetpack, wings, golden cape...).
+- Performance: item LOD pairs, short-range detail clutter, flat floor tiles, lighter shelving,
+  occlusion culling with wall/shelf occluders (store: ~1.4M -> ~0.16M primitives per frame).
+- Mess generator: localized messes (discs land near their own case), per-level mess profiles;
+  par times now come from the bot solver's playtime estimates.
+
 ### v0.3
 More levels and every edition type.
 - Level 2 "Living Room & Game Den" (~300 items, ORBIX 4/5 + Kestrel, steelbooks): sofa corner,

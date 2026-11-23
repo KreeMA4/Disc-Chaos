@@ -64,6 +64,8 @@ func size_of(it: Item) -> Vector3:
 ## Local AABB including the flipped-open front panel of open cases.
 func local_aabb(it: Item) -> AABB:
 	var s := size_of(it)
+	if it.kind == Defs.K_CART:
+		return AABB(Vector3(-s.x * 0.5, 0.0, -s.z * 0.5), s)
 	var box := AABB(-s * 0.5, s)
 	if not it.open:
 		return box
@@ -86,7 +88,9 @@ func world_xf(uid: int) -> Transform3D:
 ## True when the item is directly visible in the world (not inside a closed container/stash/hand).
 func is_visible(uid: int) -> bool:
 	var it: Item = items[uid]
-	if it.holder != 0 or it.stash >= 0:
+	if it.stash >= 0:
+		return false
+	if it.holder != 0 and it.kind != Defs.K_CART:
 		return false
 	if it.parent >= 0:
 		var p: Item = items[it.parent]
@@ -237,7 +241,7 @@ func _unhold(uid: int) -> void:
 # =============================================================== ops (return true on success)
 func op_grab(uid: int, peer: int) -> bool:
 	var it := item(uid)
-	if it == null or it.holder != 0 or it.kind == Defs.K_CART or it.stash >= 0:
+	if it == null or it.holder != 0 or it.stash >= 0:
 		return false
 	if it.parent >= 0:
 		var p: Item = items[it.parent]
@@ -249,9 +253,19 @@ func op_grab(uid: int, peer: int) -> bool:
 	if not hands.has(peer):
 		hands[peer] = []
 	(hands[peer] as Array).append(uid)
-	_unindex_tree(uid)
+	if it.kind != Defs.K_CART:
+		_unindex_tree(uid)
 	item_changed.emit(uid)
 	return true
+
+## Move a cart (pushed by its holder); its contents follow.
+func op_cart_move(uid: int, xf: Transform3D) -> void:
+	var it := item(uid)
+	if it == null or it.kind != Defs.K_CART:
+		return
+	it.xf = xf
+	_index_tree(uid)
+	item_changed.emit(uid)
 
 ## Release a held item into the world at xf.
 func op_release(uid: int, xf: Transform3D) -> bool:
@@ -647,7 +661,7 @@ func rebuild_index() -> void:
 	_hash.clear()
 	_hash_of.clear()
 	for it in items:
-		if it.kind != Defs.K_CART and is_visible(it.uid):
+		if is_visible(it.uid):
 			_index(it.uid)
 
 func query_box(center: Vector3, radius: float) -> Array:

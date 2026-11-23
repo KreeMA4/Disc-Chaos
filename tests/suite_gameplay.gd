@@ -91,7 +91,48 @@ func run() -> void:
 	Game.delete_save(1)
 	main.leave_to_menu()
 	await _frames(2)
+	await _cart_test(main)
 	main.queue_free()
+	await _frames(2)
+
+func _cart_test(main) -> void:
+	main.start_solo(5)
+	await Game.level_loaded
+	await _frames(5)
+	var st: LevelState = Game.st
+	var p: Player = Game.local_player
+	runner.check(not Game.carts.is_empty(), "store has %d push carts" % Game.carts.size())
+	var cart: int = Game.carts.keys()[0]
+	var case_uid := -1
+	for it in st.items:
+		if it.kind == Defs.K_CASE and it.parent < 0 and it.bucket < 0 and it.stash < 0 and it.holder == 0:
+			case_uid = it.uid
+			break
+	Game.request_grab(case_uid)
+	await _frames(2)
+	Game.request_insert(case_uid, cart)
+	await _frames(2)
+	runner.check(st.items[case_uid].parent == cart, "a case can be put in a cart")
+	p.global_position = st.items[cart].xf.origin + Vector3(0, 0, 1.0)
+	await _frames(2)
+	Game.request_grab(cart)
+	await _frames(2)
+	runner.check(p.pushing_cart() == cart, "player pushes the cart")
+	var before := st.world_xf(case_uid).origin
+	p.look_yaw = 0.0
+	p.touch_move = Vector2(0, -1)
+	await _frames(60)
+	p.touch_move = Vector2.ZERO
+	await _frames(2)
+	var after := st.world_xf(case_uid).origin
+	runner.check(after.distance_to(before) > 1.0, "cart contents travel with the cart (%.1f m)" % after.distance_to(before))
+	Game.request_release(cart, p.cart_xf(), Vector3.ZERO, Vector3.ZERO)
+	await _frames(2)
+	runner.check(st.items[cart].holder == 0 and p.held().is_empty(), "letting go of the cart")
+	Game.request_grab(case_uid)
+	await _frames(2)
+	runner.check(st.items[case_uid].holder == Game.me(), "items can be taken back out of a cart")
+	main.leave_to_menu()
 	await _frames(2)
 
 func _solve(p: Dictionary) -> bool:

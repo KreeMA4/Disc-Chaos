@@ -40,31 +40,57 @@ static func plan(state: LevelState, layout: LevelLayout, bucket_target: int, one
 	# group products into sections
 	var groups := {} # key -> {label, platform, kind, fmt, products: []}
 	var order: Array = []
+	var store: bool = layout.name == "store"
 	for p in state.products:
 		var t: Dictionary = Catalog.titles[p.title]
 		var key: String
 		var fmt: int = Defs.PLATFORMS[t.platform].format
+		var label: String = Defs.PLATFORMS[t.platform].name
+		var plat: int = t.platform
+		var zone := ""
 		if p.edition == Defs.E_CE:
 			key = "CE"
 			fmt = Defs.F_CEBOX
+			label = "Collector's Editions"
+			plat = -1
+			zone = "ce"
+		elif store and p.edition == Defs.E_GH:
+			key = "PRE"
+			label = "Pre-Owned & Golden Greats"
+			plat = -2
+			zone = "preowned"
+		elif store and int(t.year) >= 2025 and t.platform in [Defs.P_OX5, Defs.P_KST, Defs.P_PIP]:
+			key = "NEW"
+			label = "New Releases"
+			plat = -3
+			zone = "new"
 		else:
 			key = "P%d" % t.platform
+			zone = "retro" if t.platform in [Defs.P_BLP, Defs.P_S16, Defs.P_P32, Defs.P_RIG] else "aisle"
 		if not groups.has(key):
-			groups[key] = {"label": "Collector's Editions" if key == "CE" else Defs.PLATFORMS[t.platform].name,
-				"platform": -1 if key == "CE" else t.platform, "fmt": fmt, "products": []}
+			groups[key] = {"label": label, "platform": plat, "fmt": fmt, "products": [], "zone": zone}
 			order.append(key)
 		groups[key].products.append(p)
-	order.sort_custom(func(a, b):
-		if a == "CE": return false
-		if b == "CE": return true
-		return int(a.substr(1)) < int(b.substr(1)))
+	var rank := func(k: String) -> int:
+		match k:
+			"NEW": return -10
+			"PRE": return 100
+			"CE": return 200
+		return int(k.substr(1))
+	order.sort_custom(func(a, b): return rank.call(a) < rank.call(b))
 	# cursor per unit type
 	var cursors := {} # type -> {slot_i, row, x}
 	for key in order:
 		var g: Dictionary = groups[key]
 		var type := unit_type_for_format(g.fmt)
+		var col: Color
+		match key:
+			"CE": col = Color(0.9, 0.75, 0.4)
+			"PRE": col = Color(0.95, 0.62, 0.2)
+			"NEW": col = Color(1.0, 0.35, 0.45)
+			_: col = Defs.PLATFORMS[g.platform].banner
 		var sec := {"id": state.sections.size(), "label": g.label, "platform": g.platform, "kind": type,
-			"buckets": [], "color": Color(0.9, 0.75, 0.4) if key == "CE" else Defs.PLATFORMS[g.platform].banner}
+			"buckets": [], "color": col}
 		state.sections.append(sec)
 		var prods: Array = g.products
 		prods.sort_custom(func(a, b): return a.sort < b.sort)
@@ -73,15 +99,17 @@ static func plan(state: LevelState, layout: LevelLayout, bucket_target: int, one
 			bucket_lists = _ce_buckets(prods, bucket_target, type)
 		else:
 			bucket_lists = _letter_buckets(prods, bucket_target, type, state)
-		if not cursors.has(type):
-			cursors[type] = {"slot": _next_slot(layout, type, -1), "row": UNITS[type].rows - 1, "x": 0.0, "row_buckets": []}
-		var cur: Dictionary = cursors[type]
+		var zone: String = g.zone if _zone_exists(layout, type, g.zone) else ""
+		var ckey := type + "|" + zone
+		if not cursors.has(ckey):
+			cursors[ckey] = {"slot": _next_slot(layout, type, -1, zone), "row": UNITS[type].rows - 1, "x": 0.0, "row_buckets": [], "zone": zone}
+		var cur: Dictionary = cursors[ckey]
 		# Start each section on a fresh row (and fresh unit if requested and possible)
 		if cur.x > 0.0:
 			_finish_row(state, layout, cur, type)
 			_advance_row(layout, cur, type)
 		if one_section_per_unit and cur.row != UNITS[type].rows - 1:
-			var nxt := _next_slot(layout, type, cur.slot)
+			var nxt := _next_slot(layout, type, cur.slot, cur.zone)
 			if nxt >= 0:
 				cur.slot = nxt
 				cur.row = UNITS[type].rows - 1
@@ -113,9 +141,16 @@ static func plan(state: LevelState, layout: LevelLayout, bucket_target: int, one
 		_finish_row(state, layout, cur, type)
 	return true
 
-static func _next_slot(layout: LevelLayout, type: String, after: int) -> int:
+static func _zone_exists(layout: LevelLayout, type: String, zone: String) -> bool:
+	for s in layout.shelf_slots:
+		if s.type == type and s.get("zone", "") == zone:
+			return true
+	return false
+
+static func _next_slot(layout: LevelLayout, type: String, after: int, zone := "") -> int:
 	for i in range(after + 1, layout.shelf_slots.size()):
-		if layout.shelf_slots[i].type == type:
+		var s: Dictionary = layout.shelf_slots[i]
+		if s.type == type and String(s.get("zone", "")) == zone:
 			return i
 	return -1
 
@@ -123,7 +158,7 @@ static func _advance_row(layout: LevelLayout, cur: Dictionary, type: String) -> 
 	cur.x = 0.0
 	cur.row -= 1
 	if cur.row < 0:
-		cur.slot = _next_slot(layout, type, cur.slot)
+		cur.slot = _next_slot(layout, type, cur.slot, cur.get("zone", ""))
 		cur.row = UNITS[type].rows - 1
 
 ## Spread leftover row width over the row's buckets and compute final transforms.

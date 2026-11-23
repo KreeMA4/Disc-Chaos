@@ -31,7 +31,13 @@ Every milestone is published as a GitHub Release with a signed APK attached
 5. **Shelve it.** A case counts as solved when it is closed, holds exactly its own disc(s) and
    sits in the right section. Progress bars per section and for the whole level are top-left.
 
-Extra tricks: carry stacks of up to 6 closed cases, throw things to friends (hold to charge),
+Levels: Teen's Bedroom (tutorial, ~150 items) · Living Room & Game Den (~300, steelbooks) ·
+Basement Collector's Room (~500, Collector's Editions, multi-disc) · Retro Attic (~600, long boxes,
+jewel cases, big-box PC games, flashlight) · Level Up Loot game store (~1,550) · Warehouse
+(endless, random mess, 100–2,000 items). Finish a level to unlock the next (or enable
+Settings → Gameplay → Unlock all levels).
+
+Extra tricks: push carts (Interact) and load up to 30 items, carry stacks of up to 6 closed cases, throw things to friends (hold to charge),
 lay items out on the sorting table, search beanbags/drawers/boxes for hidden items, use the
 **Sort Scanner** (highlights where the held item belongs; recharges, or always on in Casual mode).
 Sprinting across disc piles is a bad idea. Results give 1–3 stars and unlock bonus cosmetics.

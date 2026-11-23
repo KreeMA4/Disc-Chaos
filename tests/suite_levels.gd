@@ -4,9 +4,11 @@ var runner
 var report: Array = []
 
 func run() -> void:
-	var ids := [1, 2, 3, 4, 5, 6]
-	for id in ids:
-		var def := Levels.get_def(id, 400, 77)
+	var ids := [1, 2, 3, 4, 5, 6, 106, 206]
+	for id0 in ids:
+		var id: int = id0 % 100
+		var wh_items: int = [400, 150, 1200][id0 / 100]
+		var def := Levels.get_def(id, wh_items, 77 + id0)
 		if not Layouts.IMPLEMENTED.has(def.layout):
 			continue
 		for seed in [1, 2]:
@@ -113,7 +115,7 @@ func _test_level(def: Dictionary, seed: int) -> void:
 	var four_min := solo_min / (4.0 * 0.82)
 	if seed == 1:
 		report.append("%-28s products %4d items %4d stashes %2d | est. solo %6.1f min | 4 players %5.1f min | walked %5.0f m" % [
-			"L%d %s" % [def.id, def.name], st.products.size(), n_items, L.stashes.size(), solo_min, four_min, bot.walked])
+			"L%d %s" % [def.id, def.name if def.id != 6 else "Warehouse x%d" % def.target_items], st.products.size(), n_items, L.stashes.size(), solo_min, four_min, bot.walked])
 
 func _valid_point(L: LevelLayout, p: Vector3) -> bool:
 	var r := L.room_at(Vector2(p.x, p.z))

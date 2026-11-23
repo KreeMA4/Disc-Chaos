@@ -5,6 +5,8 @@ extends RefCounted
 ## stash props, lights, environment and collision.
 
 const MERGE_CHUNK := 8.0
+## Small clutter merged into short-visibility-range meshes (cheap LOD: they vanish at distance).
+const DETAIL_PROPS := ["snack", "soda", "cable", "controller", "headphones", "cushion", "pizza_box", "books", "plant_small", "trophy", "ball", "laundry", "skateboard", "shopping_basket", "cobweb"]
 
 static var _mats := {}
 
@@ -97,9 +99,11 @@ static func build(root: Node3D, L: LevelLayout, st: LevelState, seed: int) -> Di
 			out.stash_nodes[pr.stash] = _stash_node(root, pr, rng, statics, pd)
 			continue
 		var c := Vector2i(floori(pr.pos.x / MERGE_CHUNK), floori(pr.pos.z / MERGE_CHUNK))
-		if not kits.has(c):
-			kits[c] = MeshKit.new()
-		var k: MeshKit = kits[c]
+		var detail: bool = t in DETAIL_PROPS
+		var kc: Variant = c if not detail else Vector3i(c.x, c.y, 1)
+		if not kits.has(kc):
+			kits[kc] = MeshKit.new()
+		var k: MeshKit = kits[kc]
 		k.ao_floor = 0.0
 		k.remap = {"screen": "screen%d" % (screen_i % 4)}
 		screen_i += 1
@@ -113,12 +117,18 @@ static func build(root: Node3D, L: LevelLayout, st: LevelState, seed: int) -> Di
 			if box.position.y < 0.05:
 				_blob(blobs, Vector3(box.get_center().x, 0.012, box.get_center().z), Vector2(box.size.x + 0.35, box.size.z + 0.35))
 	for c in kits:
-		_emit_kit(root, kits[c], "Props_%d_%d" % [c.x, c.y], true, pd)
+		var detail_kit: bool = c is Vector3i
+		var nodes := _emit_kit(root, kits[c], "Props_%d_%d%s" % [c.x, c.y, "_detail" if detail_kit else ""], true, pd)
+		for n in nodes:
+			n.visibility_range_end = (11.0 if detail_kit else 34.0) * float(pd.vis_mult)
+			n.visibility_range_end_margin = 1.5
+			if detail_kit:
+				n.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# --- shelves
 	var shelf_kit := MeshKit.new()
 	for i in L.shelf_slots.size():
 		var slot: Dictionary = L.shelf_slots[i]
-		_shelf_unit(shelf_kit, slot, rng, statics, slot.used)
+		_shelf_unit(shelf_kit, slot, rng, statics, slot.used, L.name in ["store", "warehouse"])
 		_blob(blobs, Vector3(slot.pos.x, 0.012, slot.pos.z), Vector2(1.5, 0.6))
 	_shelf_labels(root, shelf_kit, L, st)
 	_emit_kit(root, shelf_kit, "Shelves", true, pd)
@@ -255,17 +265,24 @@ static func _floor(k: MeshKit, r: Dictionary, rng: RandomNumberGenerator, static
 				var z0 := rect.position.y
 				while z0 < rect.end.y - 0.01:
 					var len := minf(rng.randf_range(1.2, 2.6), rect.end.y - z0)
-					k.box("toon", Transform3D(Basis(), Vector3(x, y, z0 + len * 0.5)), Vector3(w - 0.006, 0.1, len - 0.006), col, 0.004)
+					k.box("toon", Transform3D(Basis(), Vector3(x, y, z0 + len * 0.5)), Vector3(w - 0.006, 0.1, len - 0.006), col, 0.0)
 					col = base.lerp(base.darkened(0.2), rng.randf())
 					z0 += len
 		"tile":
-			var ts := 0.5
+			var ts := 0.6
+			k.box("toon", Transform3D(Basis(), Vector3(rect.get_center().x, -0.06, rect.get_center().y)), Vector3(rect.size.x, 0.1, rect.size.y), Color(0.55, 0.5, 0.48), 0.0)
+			var ca: Color = r.get("tile_a", Color(0.96, 0.9, 0.78))
+			var cb: Color = r.get("tile_b", Color(0.62, 0.8, 0.82))
+			var up := Vector3.UP
 			for i in int(ceil(rect.size.x / ts)):
 				for j in int(ceil(rect.size.y / ts)):
-					var col := Color(0.93, 0.92, 0.88) if (i + j) % 2 == 0 else Color(0.82, 0.84, 0.9)
-					var c := Vector3(rect.position.x + (i + 0.5) * ts, y, rect.position.y + (j + 0.5) * ts)
-					var sz := Vector3(minf(ts, rect.end.x - (c.x - ts * 0.5)) - 0.01, 0.1, minf(ts, rect.end.y - (c.z - ts * 0.5)) - 0.01)
-					k.box("toon", Transform3D(Basis(), c + Vector3((sz.x - ts) * 0.5 + 0.005, 0, (sz.z - ts) * 0.5 + 0.005)), sz, col, 0.005)
+					var col: Color = ca if (i + j) % 2 == 0 else cb
+					col = col.darkened(rng.randf() * 0.04)
+					var x0: float = rect.position.x + i * ts + 0.008
+					var z0: float = rect.position.y + j * ts + 0.008
+					var x1: float = minf(rect.position.x + (i + 1) * ts, rect.end.x) - 0.008
+					var z1: float = minf(rect.position.y + (j + 1) * ts, rect.end.y) - 0.008
+					k.quad("toon", Vector3(x0, -0.005, z0), Vector3(x1, -0.005, z0), Vector3(x1, -0.005, z1), Vector3(x0, -0.005, z1), up, col)
 		"carpet":
 			k.box("toon", Transform3D(Basis(), Vector3(rect.get_center().x, y, rect.get_center().y)), Vector3(rect.size.x, 0.1, rect.size.y), r.get("carpet", Color(0.55, 0.62, 0.78)), 0.0)
 		"concrete":
@@ -336,6 +353,8 @@ static func _wall(k: MeshKit, seg: Dictionary, L: LevelLayout, rng: RandomNumber
 		# collision
 		var ext := LevelLayout._rotated_extent(Vector3(w, y1 - y0, wt + 0.04), yaw)
 		_collider(statics, AABB(Vector3(p2.x - ext.x * 0.5, y0, p2.y - ext.z * 0.5), Vector3(ext.x, y1 - y0, ext.z)))
+		if w > 0.8 and y1 - y0 > 1.2:
+			_occluder(statics.get_parent(), Transform3D(basis, Vector3(p2.x, (y0 + y1) * 0.5, p2.y)), Vector3(w, y1 - y0, 0.05))
 	# door frames
 	for ho in holes:
 		if ho.window:
@@ -409,8 +428,17 @@ static func _blob(k: MeshKit, center: Vector3, size: Vector2) -> void:
 	var xf := Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), center)
 	k.plane("m", xf, size, Color(1, 1, 1, 1), false, 0)
 
+static func _occluder(root: Node, xf: Transform3D, size: Vector3) -> void:
+	var oi := OccluderInstance3D.new()
+	var bo := BoxOccluder3D.new()
+	bo.size = size
+	oi.occluder = bo
+	oi.transform = xf
+	root.add_child(oi)
+
 # ======================================================================== emitting merged meshes
-static func _emit_kit(root: Node3D, k: MeshKit, base_name: String, casts: bool, pd: Dictionary) -> void:
+static func _emit_kit(root: Node3D, k: MeshKit, base_name: String, casts: bool, pd: Dictionary) -> Array:
+	var out: Array = []
 	for chn in k.ch.keys():
 		var m := k.build_mesh(chn)
 		if m == null:
@@ -420,7 +448,7 @@ static func _emit_kit(root: Node3D, k: MeshKit, base_name: String, casts: bool, 
 		mi.name = "%s_%s" % [base_name, chn]
 		match chn:
 			"toon":
-				mi.material_override = toon_with_outline() if pd.outlines else mat("toon")
+				mi.material_override = toon_with_outline() if pd.outlines and base_name.begins_with("Props") else mat("toon")
 			"ceiling":
 				mi.material_override = mat("toon")
 				mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -440,9 +468,11 @@ static func _emit_kit(root: Node3D, k: MeshKit, base_name: String, casts: bool, 
 			# walls must not block the overhead key light from reaching the room
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(mi)
+		out.append(mi)
+	return out
 
 # ======================================================================== shelves
-static func _shelf_unit(k: MeshKit, slot: Dictionary, rng: RandomNumberGenerator, statics: StaticBody3D, used: bool) -> void:
+static func _shelf_unit(k: MeshKit, slot: Dictionary, rng: RandomNumberGenerator, statics: StaticBody3D, used: bool, merch := false) -> void:
 	var u: Dictionary = ShelfPlanner.UNITS[slot.type]
 	var xf := ShelfPlanner.unit_xf(slot)
 	var W: float = u.width
@@ -454,13 +484,13 @@ static func _shelf_unit(k: MeshKit, slot: Dictionary, rng: RandomNumberGenerator
 	var post := ShelfPlanner.POST
 	# sides, back, top, base
 	for s in [-1.0, 1.0]:
-		k.box("toon", xf * Transform3D(Basis(), Vector3(s * (W * 0.5 - post * 0.5), H * 0.5, 0)), Vector3(post, H, D + 0.02), wood.darkened(0.05), 0.008)
+		k.box("toon", xf * Transform3D(Basis(), Vector3(s * (W * 0.5 - post * 0.5), H * 0.5, 0)), Vector3(post, H, D + 0.02), wood.darkened(0.05), 0.0)
 	k.box("toon", xf * Transform3D(Basis(), Vector3(0, H * 0.5, -D * 0.5 + 0.01)), Vector3(W, H, 0.02), wood.darkened(0.15), 0.0)
-	k.box("toon", xf * Transform3D(Basis(), Vector3(0, H - 0.015, 0)), Vector3(W + 0.04, 0.03, D + 0.04), wood, 0.008)
-	k.box("toon", xf * Transform3D(Basis(), Vector3(0, u.base * 0.5, 0.0)), Vector3(W, u.base, D), wood.darkened(0.1), 0.006)
+	k.box("toon", xf * Transform3D(Basis(), Vector3(0, H - 0.015, 0)), Vector3(W + 0.04, 0.03, D + 0.04), wood, 0.0)
+	k.box("toon", xf * Transform3D(Basis(), Vector3(0, u.base * 0.5, 0.0)), Vector3(W, u.base, D), wood.darkened(0.1), 0.0)
 	for r in int(u.rows):
 		var y: float = u.base + r * u.row_h
-		k.box("toon", xf * Transform3D(Basis(), Vector3(0, y, 0)), Vector3(W - post * 2, u.board, D), wood, 0.004)
+		k.box("toon", xf * Transform3D(Basis(), Vector3(0, y, 0)), Vector3(W - post * 2, u.board, D), wood, 0.0)
 	if slot.type == "cabinet":
 		k.plane("glass", xf * Transform3D(Basis(), Vector3(0, H * 0.5, D * 0.5 + 0.02)), Vector2(W - 0.02, H - 0.1), Color.WHITE, true)
 		k.box("emit", xf * Transform3D(Basis(), Vector3(0, H - 0.04, D * 0.3)), Vector3(W - 0.15, 0.015, 0.02), Color(1.0, 0.95, 0.85) * 1.4, 0.0)
@@ -470,6 +500,7 @@ static func _shelf_unit(k: MeshKit, slot: Dictionary, rng: RandomNumberGenerator
 		var sp: Vector3 = xf * Vector3(s * (W * 0.5 - post * 0.5), 0, 0)
 		var pext := LevelLayout._rotated_extent(Vector3(post, H, D), slot.yaw)
 		_collider(statics, AABB(Vector3(sp.x - pext.x * 0.5, 0, sp.z - pext.z * 0.5), Vector3(pext.x, H, pext.z)))
+	_occluder(statics.get_parent(), xf * Transform3D(Basis(), Vector3(0, H * 0.5, -D * 0.5 + 0.01)), Vector3(W - 0.05, H - 0.05, 0.02))
 	var backp: Vector3 = xf * Vector3(0, 0, -D * 0.5 + 0.01)
 	var back_ext := LevelLayout._rotated_extent(Vector3(W, H, 0.04), slot.yaw)
 	_collider(statics, AABB(Vector3(backp.x - back_ext.x * 0.5, 0, backp.z - back_ext.z * 0.5), Vector3(back_ext.x, H, back_ext.z)))
@@ -485,13 +516,21 @@ static func _shelf_unit(k: MeshKit, slot: Dictionary, rng: RandomNumberGenerator
 			while x < W * 0.5 - post - 0.2:
 				var pick := rng.randf()
 				var lxf := xf * Transform3D(Basis(), Vector3(x + 0.1, y3, -0.02))
-				if pick < 0.55:
+				if merch:
+					# boxed consoles, controllers and accessories for sale
+					var bw := rng.randf_range(0.14, 0.3)
+					var bh := rng.randf_range(0.1, minf(0.26, float(u.row_h) - 0.06))
+					var bc := Color.from_hsv(rng.randf(), 0.55, 0.9)
+					k.box("toon", xf * Transform3D(Basis(), Vector3(x + bw * 0.5, y3 + bh * 0.5, -0.03)), Vector3(bw, bh, 0.2), bc, 0.0)
+					k.box("toon", xf * Transform3D(Basis(), Vector3(x + bw * 0.5, y3 + bh * 0.6, 0.071)), Vector3(bw * 0.7, bh * 0.35, 0.002), bc.lightened(0.45), 0.0)
+					x += bw + 0.03
+				elif pick < 0.7:
 					PropFactory.build(k, "books", lxf, {}, rng)
 					x += 0.42
-				elif pick < 0.7:
+				elif pick < 0.78:
 					PropFactory.build(k, "plant_small", lxf, {}, rng)
 					x += 0.25
-				elif pick < 0.85:
+				elif pick < 0.88:
 					PropFactory.build(k, "trophy", lxf, {}, rng)
 					x += 0.18
 				else:
@@ -505,12 +544,12 @@ static func _shelf_labels(root: Node3D, k: MeshKit, L: LevelLayout, st: LevelSta
 		var xf: Transform3D = b.xf
 		var col: Color = sec.color
 		# lip strip along the front edge of this bucket
-		k.box("toon", xf * Transform3D(Basis(), Vector3(b.width * 0.5, -0.004, 0.008)), Vector3(b.width - 0.004, 0.03, 0.012), col, 0.004)
+		k.box("toon", xf * Transform3D(Basis(), Vector3(b.width * 0.5, -0.004, 0.008)), Vector3(b.width - 0.004, 0.03, 0.012), col, 0.0)
 		# divider plate at the left edge + tab
 		var dv := xf * Transform3D(Basis(), Vector3(0.002, b.height * 0.42, -b.depth * 0.5))
-		k.box("toon", dv, Vector3(0.004, b.height * 0.84, b.depth * 0.95), Color(0.98, 0.98, 1.0), 0.0015)
+		k.box("toon", dv, Vector3(0.004, b.height * 0.84, b.depth * 0.95), Color(0.98, 0.98, 1.0), 0.0)
 		var tab := xf * Transform3D(Basis(), Vector3(0.002, b.height * 0.8, 0.02))
-		k.box("toon", tab, Vector3(0.006, 0.07, 0.06), col.lightened(0.3), 0.005)
+		k.box("toon", tab, Vector3(0.006, 0.07, 0.06), col.lightened(0.3), 0.0)
 		var lab := Label3D.new()
 		lab.text = b.label
 		lab.font = Covers.fonts.get("lilita-one")
@@ -535,7 +574,7 @@ static func _shelf_labels(root: Node3D, k: MeshKit, L: LevelLayout, st: LevelSta
 			var bw: float = (u.width - 0.05) / n
 			var bx: float = -u.width * 0.5 + 0.025 + bw * (idx + 0.5)
 			var bxf := uxf * Transform3D(Basis(), Vector3(bx, u.height + 0.13, u.depth * 0.5 - 0.02))
-			k.box("toon", bxf, Vector3(bw - 0.02, 0.24, 0.03), col, 0.03)
+			k.box("toon", bxf, Vector3(bw - 0.02, 0.24, 0.03), col, 0.0)
 			k.box("emit", bxf * Transform3D(Basis(), Vector3(0, 0, 0.016)), Vector3(bw - 0.06, 0.2, 0.002), col.lightened(0.15) * 0.9, 0.0)
 			var bl := Label3D.new()
 			bl.text = sec.label

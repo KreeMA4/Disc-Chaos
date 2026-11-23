@@ -59,9 +59,11 @@ func add_prop(type: String, pos: Vector3, yaw_deg := 0.0, params := {}) -> int:
 	props.append(entry)
 	return props.size() - 1
 
+var zone := ""   # zone tag applied to shelf slots added from now on (store areas)
+
 func add_shelf_slot(pos: Vector3, yaw_deg: float, type := "case_shelf") -> void:
 	var yaw := deg_to_rad(yaw_deg)
-	shelf_slots.append({"pos": pos, "yaw": yaw, "type": type, "room": room_at(Vector2(pos.x, pos.z)), "used": false})
+	shelf_slots.append({"pos": pos, "yaw": yaw, "type": type, "room": room_at(Vector2(pos.x, pos.z)), "used": false, "zone": zone})
 	var u: Dictionary = ShelfPlanner.UNITS[type]
 	var ext := _rotated_extent(Vector3(u.width, u.height, u.depth + 0.12), yaw)
 	obstacles.append(AABB(Vector3(pos.x - ext.x * 0.5, 0, pos.z - ext.z * 0.5), Vector3(ext.x, u.height, ext.z)))

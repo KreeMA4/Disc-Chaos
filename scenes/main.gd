@@ -84,6 +84,8 @@ func _handle_cmdline() -> void:
 	for a in args:
 		if a.begins_with("--autostart="):
 			start_solo(int(a.substr(12)))
+		elif a.begins_with("--tri-count="):
+			add_child(load("res://tests/tri_count.gd").new())
 		elif a == "--ui-shots":
 			add_child(load("res://tests/ui_shots.gd").new())
 		elif a.begins_with("--dev-shots="):

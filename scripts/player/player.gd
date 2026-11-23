@@ -176,6 +176,9 @@ func _physics_process(delta: float) -> void:
 	var speed := SPRINT if sprinting else (CROUCH if crouching else WALK)
 	var stack_slow := 1.0 - 0.04 * maxf(0.0, held().size() - 1)
 	speed *= stack_slow
+	var pushing := pushing_cart()
+	if pushing >= 0:
+		speed *= 0.85
 	var dir := (transform.basis * Vector3(mv.x, 0, mv.y))
 	var hv := Vector3(velocity.x, 0, velocity.z)
 	var target_v := dir * speed
@@ -196,6 +199,7 @@ func _physics_process(delta: float) -> void:
 	var moved := Vector2(global_position.x - before.x, global_position.z - before.z).length()
 	distance_walked += moved
 	_handle_player_bumps()
+	_update_cart_push()
 	# --- crouch eye height, bob, slip tumble
 	var eye := EYE_CROUCH if crouching else EYE
 	_bob_t += moved * 2.4
@@ -281,6 +285,29 @@ func apply_bump(push: Vector3) -> void:
 	bean.bump(2.0)
 	if push.length() > 4.5 and randf() < 0.3:
 		start_slip()
+
+# ------------------------------------------------------------------ carts
+var _cart_exception := -1
+
+func pushing_cart() -> int:
+	var t := top_held()
+	if t >= 0 and Game.st.items[t].kind == Defs.K_CART:
+		return t
+	return -1
+
+func cart_xf() -> Transform3D:
+	return Transform3D(Basis(Vector3.UP, look_yaw), global_position + Basis(Vector3.UP, look_yaw) * Vector3(0, 0, -0.95))
+
+func _update_cart_push() -> void:
+	var c := pushing_cart()
+	if c != _cart_exception:
+		if _cart_exception >= 0 and Game.carts.has(_cart_exception):
+			remove_collision_exception_with(Game.carts[_cart_exception].body)
+		if c >= 0 and Game.carts.has(c):
+			add_collision_exception_with(Game.carts[c].body)
+		_cart_exception = c
+	if c >= 0:
+		Game.local_cart_move(c, cart_xf())
 
 # ------------------------------------------------------------------ targeting
 func _ray() -> Array:
@@ -388,6 +415,10 @@ func context() -> Dictionary:
 	var top := top_held()
 	var tt: String = target.get("type", "")
 	var st := Game.st
+	if top >= 0 and st.items[top].kind == Defs.K_CART:
+		out.interact = "Let go"
+		out.name = "Cart (%d/30)" % st.items[top].contents.size()
+		return out
 	if top >= 0:
 		var hi: LevelState.Item = st.items[top]
 		out.grab = "Drop"
@@ -401,6 +432,8 @@ func context() -> Dictionary:
 			var ti: LevelState.Item = st.items[target.uid]
 			if hi.open and st.can_insert(target.uid, top):
 				out.grab = "Scoop"
+			elif ti.kind == Defs.K_CART and st.can_insert(top, target.uid):
+				out.grab = "Into cart"
 			elif ti.open and st.can_insert(top, target.uid):
 				out.grab = "Insert"
 			elif _stackable(hi) and _stackable(ti) and held().size() < MAX_STACK:
@@ -414,7 +447,10 @@ func context() -> Dictionary:
 		elif hi.kind == Defs.K_DISC:
 			out.interact = "Flip"
 	else:
-		if tt == "item":
+		if tt == "item" and st.items[target.uid].kind == Defs.K_CART:
+			out.interact = "Push"
+			out.name = "Cart (%d/30)" % st.items[target.uid].contents.size()
+		elif tt == "item":
 			var ti2: LevelState.Item = st.items[target.uid]
 			out.grab = "Grab"
 			out.name = Game.item_title(target.uid)
@@ -437,7 +473,7 @@ func _actions(delta: float) -> void:
 	if Input.is_action_just_pressed("inspect"):
 		if inspecting:
 			inspecting = false
-		elif top >= 0:
+		elif top >= 0 and Game.st.items[top].kind != Defs.K_CART:
 			inspecting = true
 			inspect_rot = Basis(Vector3.UP, PI * 0.1)
 		elif target.get("type") == "item":
@@ -449,7 +485,7 @@ func _actions(delta: float) -> void:
 		inspect_rot = Basis(Vector3.UP, PI * 0.1)
 	if Input.is_action_just_pressed("grab"):
 		_do_grab()
-	if Input.is_action_just_pressed("drop") and top >= 0:
+	if Input.is_action_just_pressed("drop") and top >= 0 and Game.st.items[top].kind != Defs.K_CART:
 		_drop(top)
 	if Input.is_action_just_pressed("interact"):
 		_do_interact()
@@ -460,7 +496,7 @@ func _actions(delta: float) -> void:
 	if Input.is_action_just_pressed("scanner"):
 		Game.use_scanner()
 	# throw: hold to charge
-	if top >= 0 and Input.is_action_just_pressed("throw"):
+	if top >= 0 and Input.is_action_just_pressed("throw") and Game.st.items[top].kind != Defs.K_CART:
 		throw_charge = 0.0
 	if throw_charge >= 0.0:
 		throw_charge = minf(throw_charge + delta, 1.0)
@@ -483,11 +519,13 @@ func _do_grab() -> void:
 	var top := top_held()
 	var tt: String = target.get("type", "")
 	if top < 0:
-		if tt == "item":
+		if tt == "item" and st.items[target.uid].kind != Defs.K_CART:
 			Game.request_grab(target.uid)
 			hands.punch()
 		return
 	var hi: LevelState.Item = st.items[top]
+	if hi.kind == Defs.K_CART:
+		return
 	match tt:
 		"bucket":
 			if ghost_ok:
@@ -504,7 +542,7 @@ func _do_grab() -> void:
 			var ti: LevelState.Item = st.items[uid]
 			if hi.open and st.can_insert(uid, top):
 				Game.request_insert(uid, top)
-			elif ti.open and st.can_insert(top, uid):
+			elif (ti.open or ti.kind == Defs.K_CART) and st.can_insert(top, uid):
 				Game.request_insert(top, uid)
 			elif _stackable(hi) and _stackable(ti) and held().size() < MAX_STACK:
 				Game.request_grab(uid)
@@ -523,6 +561,9 @@ func _drop(uid: int) -> void:
 func _do_interact() -> void:
 	var st := Game.st
 	var top := top_held()
+	if top >= 0 and st.items[top].kind == Defs.K_CART:
+		Game.request_release(top, cart_xf(), Vector3.ZERO, Vector3.ZERO)
+		return
 	if top >= 0:
 		var hi: LevelState.Item = st.items[top]
 		if hi.kind == Defs.K_CASE or hi.kind == Defs.K_CEBOX:
@@ -539,7 +580,9 @@ func _do_interact() -> void:
 	match target.get("type", ""):
 		"item":
 			var ti: LevelState.Item = st.items[target.uid]
-			if ti.kind == Defs.K_DISC and ti.parent < 0:
+			if ti.kind == Defs.K_CART:
+				Game.request_grab(target.uid)
+			elif ti.kind == Defs.K_DISC and ti.parent < 0:
 				Game.request_flip(target.uid)
 			elif ti.kind == Defs.K_CASE or ti.kind == Defs.K_CEBOX:
 				Game.request_open(target.uid, not ti.open)

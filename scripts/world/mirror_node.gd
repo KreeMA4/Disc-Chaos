@@ -35,8 +35,7 @@ func _ready() -> void:
 	_cam.projection = Camera3D.PROJECTION_FRUSTUM
 	_cam.cull_mask = 0xFFFFF
 	_vp.add_child(_cam)
-	_mat.albedo_texture = _vp.get_texture()
-	_mat.albedo_color = Color(0.92, 0.96, 1.0)
+	_mat.albedo_color = Color(0.75, 0.85, 0.92)
 
 func _process(_delta: float) -> void:
 	if _vp == null:
@@ -48,7 +47,13 @@ func _process(_delta: float) -> void:
 	var close := local.z > 0.05 and local.length() < ACTIVE_DIST
 	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS if close else SubViewport.UPDATE_DISABLED
 	if not close:
+		if _mat.albedo_texture != null:
+			_mat.albedo_texture = null
+			_mat.albedo_color = Color(0.75, 0.85, 0.92)
 		return
+	if _mat.albedo_texture == null:
+		_mat.albedo_texture = _vp.get_texture()
+		_mat.albedo_color = Color(0.92, 0.96, 1.0)
 	var b := global_transform.basis * Basis(Vector3.UP, PI)
 	_cam.global_transform = Transform3D(b, global_transform * Vector3(local.x, local.y, -local.z))
 	_cam.set_frustum(size.y, Vector2(local.x, -local.y), local.z, 40.0)

@@ -13,7 +13,7 @@ static func build(def: Dictionary, layout: LevelLayout, seed: int) -> LevelState
 	rng.seed = seed * 31 + int(def.id) * 1009
 	_select_products(st, def, rng)
 	_create_items(st)
-	if not ShelfPlanner.plan(st, layout, def.get("bucket", 8), def.id != 5):
+	if not ShelfPlanner.plan(st, layout, def.get("bucket", 8), def.id < 5):
 		push_error("MessGen: shelf planning failed for level %d" % def.id)
 	_make_tables(st, layout)
 	_make_stashes(st, layout)
@@ -214,12 +214,12 @@ static func _wreck(st: LevelState, def: Dictionary, layout: LevelLayout, rng: Ra
 	for p in st.products:
 		all_discs.append_array(p.discs)
 	for d in all_discs:
-		if rng.randf() < 0.42 + 0.1 * hard:
+		if rng.randf() < float(def.get("loose", 0.42 + 0.1 * hard)):
 			_detach_raw(st, d)
 			loose.append(d)
 	# 4) wrong-case swaps among discs still in cases (cycles keep capacity intact)
 	var in_case: Array = all_discs.filter(func(d): return st.items[d].parent >= 0)
-	var swap_n := int(in_case.size() * (0.28 + 0.1 * hard))
+	var swap_n := int(in_case.size() * float(def.get("swap", 0.28 + 0.1 * hard)))
 	var chosen: Array = []
 	for i in swap_n:
 		if in_case.is_empty():
@@ -306,9 +306,26 @@ static func _wreck(st: LevelState, def: Dictionary, layout: LevelLayout, rng: Ra
 		var c := layout.random_floor_point(rng, 0.55)
 		if c != Vector3.INF:
 			pile_centers.append(c)
-	for u in to_place:
-		var r := rng.randf()
+	# roots first so loose discs/pieces can land near their own case (messes are local)
+	var roots_first: Array = to_place.filter(func(u): return st.items[u].product >= 0 and st.products[st.items[u].product].root == u)
+	var others: Array = to_place.filter(func(u): return not roots_first.has(u))
+	var locality: float = def.get("locality", 0.45)
+	for u in roots_first + others:
 		var placed := false
+		var it: LevelState.Item = st.items[u]
+		if it.product >= 0 and st.products[it.product].root != u and rng.randf() < locality:
+			var root: LevelState.Item = st.items[st.products[it.product].root]
+			if root.parent < 0 and root.bucket < 0 and root.stash < 0:
+				for attempt in 6:
+					var off := Vector2(rng.randfn(0.0, 1.1), rng.randfn(0.0, 1.1))
+					var p := Vector3(root.xf.origin.x + off.x, 0, root.xf.origin.z + off.y)
+					if layout.is_free(p, 0.12):
+						_place_flat(st, heights, u, p, rng)
+						placed = true
+						break
+		if placed:
+			continue
+		var r := rng.randf()
 		if r < 0.14 and not layout.surfaces.is_empty():
 			placed = _place_on_surface(st, layout, heights, u, rng)
 		if not placed and r < 0.72 and not pile_centers.is_empty():

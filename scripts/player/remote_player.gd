@@ -107,6 +107,8 @@ func _update_held() -> void:
 	bean.wobble.add_child(_held_vis)
 	var y := 0.0
 	for uid in h:
+		if Game.st.items[uid].kind == Defs.K_CART:
+			continue
 		var v := Game.world.make_visual(uid)
 		var it: LevelState.Item = Game.st.items[uid]
 		var s := Game.st.size_of(it)

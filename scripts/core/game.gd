@@ -42,6 +42,8 @@ var _time_sync_t := 0.0
 var _bucket_grid := {}
 var _scanner_marker: MeshInstance3D
 var _highlighted := -1
+var carts := {}                  # uid -> CartNode
+var _cart_t := 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -130,6 +132,14 @@ func load_level(id: int, seed: int, wh_items := 400) -> void:
 		world.ACTIVATE_R = 1.7
 		world.MAX_ACTIVE = 70
 	_build_bucket_grid()
+	carts.clear()
+	for it in st.items:
+		if it.kind == Defs.K_CART:
+			var cn := CartNode.new()
+			cn.uid = it.uid
+			level_root.add_child(cn)
+			cn.global_transform = it.xf
+			carts[it.uid] = cn
 	_spawn_local_player()
 	for peer in Net.players:
 		if peer != me():
@@ -146,6 +156,7 @@ func load_level(id: int, seed: int, wh_items := 400) -> void:
 
 func unload_level() -> void:
 	running = false
+	carts.clear()
 	if level_root:
 		level_root.queue_free()
 	level_root = null
@@ -256,6 +267,31 @@ func ev_rest(uid: int, xf: Transform3D) -> void:
 	st.op_move(uid, xf)
 	world._dirty[uid] = true
 
+# ======================================================================== carts
+## Called every physics frame by the pushing player: move locally, sync at 10 Hz.
+func local_cart_move(uid: int, xf: Transform3D) -> void:
+	st.op_cart_move(uid, xf)
+	_cart_t -= get_physics_process_delta_time()
+	if _cart_t > 0.0 or not multiplayer.has_multiplayer_peer() or multiplayer.get_peers().is_empty():
+		return
+	_cart_t = 0.1
+	if is_host():
+		ev_cart.rpc(uid, xf)
+	else:
+		rq_cart.rpc_id(1, uid, xf)
+
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func rq_cart(uid: int, xf: Transform3D) -> void:
+	var peer := multiplayer.get_remote_sender_id()
+	if st and _held_by(peer, uid):
+		st.op_cart_move(uid, xf)
+		ev_cart.rpc(uid, xf)
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func ev_cart(uid: int, xf: Transform3D) -> void:
+	if st and st.items[uid].holder != me():
+		st.op_cart_move(uid, xf)
+
 # ======================================================================== player state sync
 func send_player_state(p: Player) -> void:
 	_state_t -= get_physics_process_delta_time()
@@ -324,8 +360,10 @@ func _srv_grab(peer: int, uid: int) -> void:
 	if st == null or uid < 0 or uid >= st.items.size():
 		return
 	var it: LevelState.Item = st.items[uid]
-	if it.holder != 0 or it.stash >= 0 or it.kind == Defs.K_CART:
+	if it.holder != 0 or it.stash >= 0:
 		return  # someone else already has it: grab ownership is first-come on the host
+	if it.kind == Defs.K_CART and not st.held_by(peer).is_empty():
+		return
 	if it.parent >= 0 and st.items[it.parent].kind != Defs.K_CART and not st.items[it.parent].open:
 		return
 	var h := st.held_by(peer)
@@ -438,6 +476,9 @@ func ev_release(uid: int, xf: Transform3D, vel: Vector3, ang: Vector3, peer: int
 	if st == null:
 		return
 	st.op_release(uid, xf)
+	if st.items[uid].kind == Defs.K_CART:
+		Sfx.play("thud", xf.origin)
+		return
 	world.activate(uid, xf, vel, ang)
 
 @rpc("authority", "call_local", "reliable")

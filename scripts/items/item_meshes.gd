@@ -19,6 +19,46 @@ static func render_key(it: LevelState.Item) -> String:
 		Defs.K_MANUAL: return "manual"
 	return ""
 
+## Low-detail variant for distant items (no bevels, fewer segments).
+static func mesh_lod(key: String) -> ArrayMesh:
+	var lk := key + "#lod"
+	if _cache.has(lk):
+		return _cache[lk]
+	var parts := key.split("_")
+	var k := MeshKit.new()
+	k.uv_mode = true
+	k.ao_enabled = false
+	match parts[0]:
+		"case":
+			var fmt := int(parts[1])
+			var s: Vector3 = Defs.FORMAT_SIZE[fmt]
+			if parts.size() > 2 and fmt in [Defs.F_MODERN, Defs.F_HANDHELD, Defs.F_MINI, Defs.F_JEWEL]:
+				k.box("m", Transform3D(Basis(), Vector3(0, 0, -s.z * 0.25)), Vector3(s.x, s.y, s.z * 0.5), Color.WHITE, 0.0, {"-z": 1})
+				k.box("m", Transform3D(Basis(), Vector3(-s.x - s.z, 0, -s.z * 0.25)), Vector3(s.x, s.y, s.z * 0.5), Color.WHITE, 0.0, {"-z": 0})
+			elif parts.size() > 2:
+				_cache[lk] = mesh(key)
+				return _cache[lk]
+			else:
+				k.box("m", Transform3D(), s, Color.WHITE, 0.0, {"+z": 0, "-z": 1, "-x": 2})
+		"cebox":
+			if key == "cebox_open":
+				_cache[lk] = mesh(key)
+				return _cache[lk]
+			k.box("m", Transform3D(), Defs.FORMAT_SIZE[Defs.F_CEBOX], Color.WHITE, 0.0, {"+z": 0, "-z": 1, "-x": 2})
+		"disc":
+			var r: float = Defs.DISC_RADIUS[int(parts[1])]
+			k.cylinder("m", Transform3D(), r, Defs.DISC_THICK, Color.WHITE, 10, -1.0, true, 0.0, 0, 1, 2)
+		"figure":
+			var fs: Vector3 = Defs.PIECE_SIZE[Defs.K_FIGURE]
+			k.cylinder("m", Transform3D(Basis(), Vector3(0, -fs.y * 0.5 + 0.01, 0)), 0.045, 0.02, Color.WHITE, 8, -1.0, true, 0.0, 1, 1, 1)
+			k.cylinder("m", Transform3D(Basis(), Vector3(0, 0.0, 0)), 0.032, 0.14, Color.WHITE, 8)
+		_:
+			_cache[lk] = mesh(key)
+			return _cache[lk]
+	var m := k.build_mesh("m")
+	_cache[lk] = m
+	return m
+
 static func mesh(key: String) -> ArrayMesh:
 	if _cache.has(key):
 		return _cache[key]
@@ -41,7 +81,7 @@ static func mesh(key: String) -> ArrayMesh:
 		"disc":
 			var fmt := int(parts[1])
 			var r: float = Defs.DISC_RADIUS[fmt]
-			k.cylinder("m", Transform3D(), r, Defs.DISC_THICK, Color.WHITE, 32, -1.0, true, r * 0.1, 0, 1, 2)
+			k.cylinder("m", Transform3D(), r, Defs.DISC_THICK, Color.WHITE, 22, -1.0, true, r * 0.1, 0, 1, 2)
 		"artbook":
 			var s: Vector3 = Defs.PIECE_SIZE[Defs.K_ARTBOOK]
 			k.box("m", Transform3D(), s, Color.WHITE, 0.004, {"+z": 0, "-z": 1, "-x": 2})
