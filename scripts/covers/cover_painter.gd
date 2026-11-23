@@ -356,7 +356,7 @@ func motif(r: Rect2, t: Dictionary, pal: Dictionary, zoom := 1.0, offset := Vect
 			draw_rect(Rect2(sw + Vector2(-S * 0.09, -S * 0.02), Vector2(S * 0.18, S * 0.03)), pal.accent)
 			draw_circle(sw + Vector2(0, -S * 0.3), S * 0.08, Color(pal.accent2, 0.35))
 		Defs.G_HORROR:
-			grad_rect(r, Color(0.05, 0.08, 0.06), pal.mid.darkened(0.4))
+			grad_rect(r, Color(0.12, 0.16, 0.14), pal.mid.darkened(0.15))
 			draw_circle(P.call(0.75, 0.22), S * 0.14, Color(0.95, 0.95, 0.8))
 			draw_circle(P.call(0.78, 0.2), S * 0.12, Color(0.85, 0.85, 0.7))
 			var mc: Vector2 = P.call(0.5, 0.75)

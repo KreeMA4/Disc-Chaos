@@ -28,6 +28,7 @@ const DEFAULTS := {
 	"last_code": "",
 	"warehouse_items": 400,
 	"dev_no_cover_cache": false,
+	"unlock_all": false,
 }
 
 var values := {}

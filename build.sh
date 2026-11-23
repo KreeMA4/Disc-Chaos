@@ -24,6 +24,7 @@ echo ">> Importing project"
 if [ "${SKIP_TESTS:-0}" != "1" ]; then
   echo ">> Running tests"
   bash tools/run_tests.sh
+  GODOT_BIN="$GODOT_BIN" bash tools/net_test.sh | tail -3
 fi
 
 mkdir -p build

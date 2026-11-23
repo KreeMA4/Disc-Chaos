@@ -93,7 +93,7 @@ func stars_needed(cat: String, idx: int) -> int:
 	return UNLOCKS.get(cat, {}).get(idx, 0)
 
 func level_unlocked(id: int) -> bool:
-	if id <= 1:
+	if id <= 1 or Settings.get_value("unlock_all"):
 		return true
 	if id == 6:
 		return completed.has(1) or completed.has("1")

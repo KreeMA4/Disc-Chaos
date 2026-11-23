@@ -85,7 +85,7 @@ static func _bedroom(L: LevelLayout, rng: RandomNumberGenerator) -> void:
 	L.add_stash("beanbag", Vector3(4.0, 0, 4.0), -25, {"color": Color(0.45, 0.8, 0.55)})
 	L.add_prop("rug_round", Vector3(3.3, 0, 3.2), 0, {"r": 1.35, "color": Color(0.95, 0.6, 0.65), "color2": Color(1.0, 0.85, 0.55)})
 	L.add_prop("rug", Vector3(1.3, 0, 2.6), 0, {"w": 1.6, "d": 1.0, "color": Color(0.5, 0.75, 0.6)})
-	L.add_prop("plant_big", Vector3(0.38, 0, 5.0), 0)
+	L.add_prop("plant_big", Vector3(1.05, 0, 5.05), 0)
 	L.add_prop("lamp_floor", Vector3(6.25, 0, 4.95), 0)
 	L.add_light(Vector3(6.25, 1.5, 4.85), Color(1.0, 0.75, 0.45), 0.8, 3.5)
 	L.add_prop("guitar", Vector3(5.2, 0, 5.2), 180)
@@ -93,8 +93,8 @@ static func _bedroom(L: LevelLayout, rng: RandomNumberGenerator) -> void:
 	L.add_prop("speaker", Vector3(2.3, 0.5, 5.1), 180)
 	L.add_prop("speaker", Vector3(4.3, 0.5, 5.1), 180)
 	L.add_prop("ball", Vector3(1.0, 0, 4.4), 0, {"color": Color(1.0, 0.55, 0.2)})
-	L.add_prop("mirror_frame", Vector3(0.08, 0, 4.0), 90, {"color": Color(1.0, 0.8, 0.4)})
-	L.mirror = {"pos": Vector3(0.12, 0.95, 4.0), "yaw": deg_to_rad(90), "size": Vector2(0.8, 1.8)}
+	L.add_prop("mirror_frame", Vector3(0.08, 0, 4.5), 90, {"color": Color(1.0, 0.8, 0.4)})
+	L.mirror = {"pos": Vector3(0.12, 0.95, 4.5), "yaw": deg_to_rad(90), "size": Vector2(0.8, 1.8)}
 	L.add_prop("door", Vector3(5.2, 0, D - 0.04), 180)
 	# shelves: two units on the west wall + spare on the north wall
 	L.add_shelf_slot(Vector3(0.16, 0, 2.05), 90, "case_shelf")

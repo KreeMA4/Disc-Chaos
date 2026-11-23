@@ -355,13 +355,13 @@ func _build_hat(k: MeshKit, idx: int) -> void:
 	var top := Vector3(0, H - 0.04, 0)
 	match idx:
 		1: # cap
-			k.sphere("toon", Transform3D(Basis(), top + Vector3(0, -0.04, 0)), Vector3(R * 0.98, 0.18, R * 0.98), Color(0.95, 0.3, 0.3), 6, 16, true)
-			k.box("toon", Transform3D(Basis(Vector3.RIGHT, 0.1), top + Vector3(0, -0.03, -R - 0.08)), Vector3(0.34, 0.025, 0.22), Color(0.95, 0.3, 0.3), 0.012)
-			k.sphere("toon", Transform3D(Basis(), top + Vector3(0, 0.14, 0)), Vector3(0.03, 0.03, 0.03), Color.WHITE, 3, 6)
+			k.sphere("toon", Transform3D(Basis(), Vector3(0, 1.1, 0)), Vector3(0.355, 0.245, 0.355), Color(0.95, 0.3, 0.3), 6, 16, true)
+			k.box("toon", Transform3D(Basis(Vector3.RIGHT, 0.12), Vector3(0, 1.11, -0.4)), Vector3(0.32, 0.025, 0.2), Color(0.95, 0.3, 0.3), 0.012)
+			k.sphere("toon", Transform3D(Basis(), Vector3(0, 1.345, 0)), Vector3(0.03, 0.03, 0.03), Color.WHITE, 3, 6)
 		2: # beanie
-			k.sphere("toon", Transform3D(Basis(), top + Vector3(0, -0.06, 0)), Vector3(R + 0.01, 0.26, R + 0.01), Color(0.4, 0.55, 0.95), 6, 16, true)
-			k.cylinder("toon", Transform3D(Basis(), top + Vector3(0, -0.06, 0)), R + 0.025, 0.08, Color(0.35, 0.45, 0.85), 18)
-			k.sphere("toon", Transform3D(Basis(), top + Vector3(0, 0.22, 0)), Vector3(0.07, 0.07, 0.07), Color.WHITE, 4, 8)
+			k.sphere("toon", Transform3D(Basis(), Vector3(0, 1.08, 0)), Vector3(0.37, 0.31, 0.37), Color(0.4, 0.55, 0.95), 6, 16, true)
+			k.cylinder("toon", Transform3D(Basis(), Vector3(0, 1.11, 0)), 0.365, 0.08, Color(0.35, 0.45, 0.85), 18, 0.34)
+			k.sphere("toon", Transform3D(Basis(), Vector3(0, 1.41, 0)), Vector3(0.07, 0.07, 0.07), Color.WHITE, 4, 8)
 		3: # crown
 			var gold := Color(1.0, 0.8, 0.25)
 			k.cylinder("toon", Transform3D(Basis(), top + Vector3(0, 0.02, 0)), 0.2, 0.1, gold, 16, -1.0, false)
@@ -374,7 +374,7 @@ func _build_hat(k: MeshKit, idx: int) -> void:
 			for s in [-1.0, 1.0]:
 				k.cylinder("toon", Transform3D(Basis(Vector3.BACK, PI * 0.5), Vector3(s * (R + 0.02), 1.0, 0)), 0.1, 0.07, Color(0.95, 0.35, 0.55), 14)
 		5: # propeller
-			k.sphere("toon", Transform3D(Basis(), top + Vector3(0, -0.04, 0)), Vector3(R * 0.95, 0.16, R * 0.95), Color(0.3, 0.6, 0.95), 6, 16, true)
+			k.sphere("toon", Transform3D(Basis(), Vector3(0, 1.1, 0)), Vector3(0.355, 0.245, 0.355), Color(0.3, 0.6, 0.95), 6, 16, true)
 			k.cylinder("toon", Transform3D(Basis(), top + Vector3(0, 0.16, 0)), 0.012, 0.08, OUT, 6)
 			k.box("toon", Transform3D(Basis(Vector3.UP, 0.4), top + Vector3(0, 0.2, 0)), Vector3(0.36, 0.01, 0.06), Color(1.0, 0.85, 0.2), 0.01)
 		6: # traffic cone
@@ -397,7 +397,7 @@ func _build_hat(k: MeshKit, idx: int) -> void:
 		10: # horns
 			for s in [-1.0, 1.0]:
 				k.cylinder("toon", Transform3D(Basis(Vector3.BACK, -s * 0.5), top + Vector3(s * 0.22, -0.02, 0)), 0.06, 0.26, Color(0.98, 0.95, 0.85), 10, 0.0)
-			k.sphere("toon", Transform3D(Basis(), top + Vector3(0, -0.06, 0)), Vector3(R * 0.97, 0.15, R * 0.97), Color(0.6, 0.6, 0.65), 6, 16, true)
+			k.sphere("toon", Transform3D(Basis(), Vector3(0, 1.1, 0)), Vector3(0.355, 0.245, 0.355), Color(0.6, 0.6, 0.65), 6, 16, true)
 		11: # bunny ears
 			for s in [-1.0, 1.0]:
 				k.capsule("toon", Transform3D(Basis(Vector3.BACK, -s * 0.18), top + Vector3(s * 0.12, 0.18, 0)), 0.06, 0.36, Color.WHITE, 10)

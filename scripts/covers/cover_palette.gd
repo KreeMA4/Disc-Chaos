@@ -10,9 +10,9 @@ static func palette(t: Dictionary) -> Dictionary:
 	var genre: int = t.genre
 	var dark_bias := 0.0
 	match genre:
-		Defs.G_HORROR: h = 0.30 + rng.randf() * 0.15; dark_bias = 0.35
+		Defs.G_HORROR: h = 0.30 + rng.randf() * 0.15; dark_bias = 0.2
 		Defs.G_SPACE: h = 0.62 + rng.randf() * 0.18; dark_bias = 0.25
-		Defs.G_STEALTH: h = 0.55 + rng.randf() * 0.1; dark_bias = 0.3
+		Defs.G_STEALTH: h = 0.55 + rng.randf() * 0.1; dark_bias = 0.18
 		Defs.G_FARM: h = 0.1 + rng.randf() * 0.15
 		Defs.G_CRIME: h = 0.88 + rng.randf() * 0.15
 		Defs.G_MECH: h = rng.randf() * 0.15 + 0.02

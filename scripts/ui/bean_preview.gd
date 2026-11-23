@@ -68,7 +68,7 @@ func set_beans(looks: Array) -> void:
 		b.position = Vector3((i - (n - 1) * 0.5) * 0.95, 0, 0)
 		vp.add_child(b)
 		beans.append(b)
-	cam.position = Vector3(0, 0.9 + n * 0.05, 2.6 + maxf(0, n - 1) * 0.8)
+	cam.position = Vector3(0, 0.85 + n * 0.05, 3.1 + maxf(0, n - 1) * 0.8)
 
 func _process(delta: float) -> void:
 	_t += delta

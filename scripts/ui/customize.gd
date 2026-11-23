@@ -118,8 +118,8 @@ func _build_grid() -> void:
 			grid.add_child(b)
 		var cp := ColorPickerButton.new()
 		cp.color = Profile.look.color if Profile.look.color is Color else Color.WHITE
-		cp.custom_minimum_size = Vector2(240, 100)
-		cp.text = "Custom"
+		cp.custom_minimum_size = Vector2(120, 100)
+		cp.text = "+"
 		cp.edit_alpha = false
 		cp.color_changed.connect(func(c):
 			Profile.set_look("color", c)

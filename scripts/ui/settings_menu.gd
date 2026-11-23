@@ -82,6 +82,7 @@ func _build() -> void:
 		3:
 			body.add_child(UIKit.toggle_row("Casual mode (scanner always on)", Settings.get_value("casual_scanner"), func(on): Settings.set_value("casual_scanner", on)))
 			body.add_child(UIKit.toggle_row("Ragdoll slips", Settings.get_value("ragdoll"), func(on): Settings.set_value("ragdoll", on)))
+			body.add_child(UIKit.toggle_row("Unlock all levels", Settings.get_value("unlock_all"), func(on): Settings.set_value("unlock_all", on)))
 			var nr := UIKit.hbox()
 			nr.add_child(UIKit.label("Clear cover-art cache", 28))
 			nr.add_child(UIKit.button("Clear", UIKit.RED, func():

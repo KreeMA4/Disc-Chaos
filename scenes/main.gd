@@ -84,6 +84,8 @@ func _handle_cmdline() -> void:
 	for a in args:
 		if a.begins_with("--autostart="):
 			start_solo(int(a.substr(12)))
+		elif a == "--ui-shots":
+			add_child(load("res://tests/ui_shots.gd").new())
 		elif a.begins_with("--dev-shots="):
 			add_child(load("res://tests/dev_shots.gd").new())
 		elif a == "--nettest-host" or a.begins_with("--nettest-client"):

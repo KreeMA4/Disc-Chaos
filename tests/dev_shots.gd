@@ -32,6 +32,15 @@ func _ready() -> void:
 		var bx: Transform3D = b.xf
 		var front := bx.origin + bx.basis.z * 1.1 + bx.basis.x * 0.4
 		views.append(["shelf", Vector3(front.x, 0, front.z), atan2(bx.basis.z.x, bx.basis.z.z), -0.35])
+	if not L.mirror.is_empty():
+		var mp: Vector3 = L.mirror.pos
+		var fwd: Vector3 = Basis(Vector3.UP, L.mirror.yaw) * Vector3.BACK
+		views.append(["mirror", Vector3(mp.x, 0, mp.z) + fwd * 1.6, L.mirror.yaw, -0.1])
+	for it in Game.st.items:
+		if it.parent < 0 and it.bucket < 0 and it.stash < 0 and it.kind == Defs.K_CASE and it.open:
+			var o: Vector3 = it.xf.origin
+			views.append(["floor", Vector3(o.x, 0, o.z + 0.9), 0.0, -1.0])
+			break
 	for v in views:
 		p.global_position = v[1]
 		p.look_yaw = v[2]
