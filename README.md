@@ -70,8 +70,12 @@ left flashlight / right drop · Start pause.
 * Ports: game UDP 47010 (ENet), discovery UDP 47011.
 * Late joiners get a full state sync. If the host leaves, everyone returns to the menu with a
   message. Players dropping mid-level drop whatever they were holding.
-* The host can save mid-level (Pause → Save game, also automatic when leaving) and resume later
-  from the level select (**Continue**).
+* The host can save mid-level (Pause → Save game, also automatic when leaving, and every
+  2.5 minutes while items change) and resume later from the level select (**Continue**).
+  Items carried at save time come back with whoever plays that player slot in the new session;
+  items of players who are not there are put back on the floor. Saves from the v1.0 game are
+  migrated on first Continue (the original is kept as `level_N.save.v1.bak`); saves made with an
+  older level catalog are kept but cannot be continued (the level card offers **Discard old save**).
 
 ### Adding an internet relay later
 
@@ -135,6 +139,9 @@ tools/net_test.sh             # headless host + 2 clients on localhost
   estimating solo / 4-player time (report in `tests/out/level_report.txt`).
 * **gameplay** – the real scene: solving through requests, throwing, stack carry, grab ownership,
   stashes, save/resume.
+* **sweep**, **reg_*** – the v1.0.1 critical-fix regression suites (aiming through containers,
+  window/boundary colliders, cart collision, save migration with real v1.0 fixtures, autosave);
+  see `tests/README.md`.
 
 ## Playtime estimates (bot solver)
 
@@ -200,7 +207,8 @@ FPS/draw-call counter (F3 or Settings).
   Medium if the store dips below 60 FPS.
 * First launch paints and caches cover art: the first load of each level takes a few seconds
   longer; the first inspect of an item can hitch briefly while its 528 px cover renders.
-* Carts follow the pushing player kinematically and can clip into shelves or walls.
+* Carts are pushed kinematically: they stop at walls and shelves and slide along them, but a
+  cart still pushes through nothing (no cart-vs-item or cart-vs-player collision).
 * "Ragdoll" slips are a procedural tumble (camera roll + bean tipping over), not a bone ragdoll.
 * Internet play needs a relay that isn't included (see "Adding an internet relay later").
 * The APK is signed with a debug key (fine for sideloading, not for the Play Store).
