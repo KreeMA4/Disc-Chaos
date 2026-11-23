@@ -625,7 +625,7 @@ func _update_held_visual(delta: float) -> void:
 		var target_pos := Vector3(0.0, -0.2, -0.5)
 		var target_b := Basis()
 		if inspecting:
-			target_pos = Vector3(0, -0.02, -0.34)
+			target_pos = Vector3(0, -0.07, -0.36)
 			target_b = inspect_rot
 		hold_point.position = hold_point.position.lerp(target_pos, clampf(delta * 12.0, 0, 1))
 		hold_point.basis = hold_point.basis.slerp(target_b, clampf(delta * 12.0, 0, 1))

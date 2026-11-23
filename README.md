@@ -136,6 +136,76 @@ tools/net_test.sh             # headless host + 2 clients on localhost
 * **gameplay** – the real scene: solving through requests, throwing, stack carry, grab ownership,
   stashes, save/resume.
 
+## Playtime estimates (bot solver)
+
+The level suite solves every generated level with a bot that walks, searches, opens, inserts and
+shelves using only gameplay rules, and converts that into human time (walking at 3 m/s with
+detours, per-action costs, a search cost that grows with level size). It does not use carts or the
+sorting table, so it is pessimistic.
+
+| Level | Products | Items | Solo | 4 players |
+|---|---|---|---|---|
+| 1 Teen's Bedroom | 75 | 150 | ~13 min | ~4 min |
+| 2 Living Room & Game Den | 150 | 300 | ~31 min | ~10 min |
+| 3 Basement Collector's Room | 208 | 501 | ~59 min | ~18 min |
+| 4 Retro Attic | 211 | 601 | ~78 min | ~24 min |
+| 5 Level Up Loot | 600 | 1,544 | ~3.5 h | ~55–63 min |
+| Warehouse (400 / 1,200 items) | 173 / 419 | 402 / 1,101 | ~50 / ~155 min | ~15 / ~47 min |
+
+Full campaign: ~6.5 hours solo, ~2 hours with four players. Par times (for 2–3 stars) come from
+these estimates.
+
+## Performance
+
+Rendering budget per frame, measured with `tools/perf_report.sh` (software Vulkan in CI, so FPS is
+not meaningful there; the numbers are the per-frame workload the phone has to render). Worst view
+of each level, 1600×738:
+
+| Level | Preset | max draw calls | max primitives | active bodies | MultiMesh batches | static items | VRAM MB | RAM MB |
+|---|---|---|---|---|---|---|---|---|
+| 1 Bedroom | Low | 75 | 34656 | 35 | 3 | 66 | 275.1 | 167.1 |
+| 1 Bedroom | Medium | 141 | 108812 | 20 | 3 | 85 | 292.5 | 164.5 |
+| 1 Bedroom | High | 216 | 180888 | 43 | 3 | 60 | 316.2 | 184.7 |
+| 1 Bedroom | Ultra | 261 | 180706 | 42 | 3 | 67 | 361.0 | 151.2 |
+| 3 Basement | Low | 103 | 92534 | 39 | 11 | 338 | 301.1 | 187.9 |
+| 3 Basement | Medium | 155 | 226072 | 43 | 12 | 340 | 319.0 | 187.2 |
+| 3 Basement | High | 249 | 269586 | 79 | 12 | 284 | 338.4 | 187.3 |
+| 3 Basement | Ultra | 210 | 363398 | 37 | 12 | 340 | 390.2 | 176.4 |
+| 5 Store | Low | 179 | 105902 | 27 | 53 | 991 | 391.8 | 771.2 |
+| 5 Store | Medium | 208 | 162252 | 38 | 52 | 961 | 403.0 | 237.7 |
+| 5 Store | High | 239 | 250148 | 14 | 52 | 1004 | 430.2 | 243.1 |
+| 5 Store | Ultra | 234 | 258090 | 12 | 54 | 995 | 484.9 | 262.9 |
+| 6 Warehouse | Low | 86 | 51680 | 22 | 23 | 270 | 288.6 | 165.9 |
+| 6 Warehouse | Medium | 121 | 67356 | 31 | 18 | 251 | 308.8 | 195.6 |
+| 6 Warehouse | High | 228 | 188464 | 16 | 22 | 284 | 329.8 | 176.5 |
+| 6 Warehouse | Ultra | 158 | 108110 | 11 | 24 | 280 | 381.6 | 193.1 |
+
+How it stays cheap: items at rest are drawn through chunked MultiMeshes (one unit mesh for every
+case/box format, scaled per instance) with texture-array atlases, so ~1,000 visible items cost
+about 50 batches; near/far LOD pairs via visibility ranges; small clutter in short-range meshes;
+props merged into one mesh per 8 m chunk and material; occlusion culling with box occluders on
+walls and shelf backs; only items within ~2 m of a player (max 90, 70 in the store) are
+RigidBody3D, everything else is frozen data; hi-res covers only for held/inspected items; fake AO
+in vertex colors; at most 2–8 omni lights depending on preset (store ×2.5, spread out).
+
+Graphics presets: **Low** (0.67 render scale with FSR, no shadows, no glow, FXAA, 30 FPS-friendly),
+**Medium** (soft directional shadows, glow), **High** (outlines on props, MSAA 2×), **Ultra**
+(4096 shadow map, MSAA 4×, longer draw distance). Render scale slider, FPS cap 30/60/120 and an
+FPS/draw-call counter (F3 or Settings).
+
+## Known issues
+
+* Not yet verified on a physical Galaxy S25 Ultra from this build environment (no device access);
+  performance numbers above are workload measurements, not on-device FPS. Start on High; drop to
+  Medium if the store dips below 60 FPS.
+* First launch paints and caches cover art: the first load of each level takes a few seconds
+  longer; the first inspect of an item can hitch briefly while its 528 px cover renders.
+* Carts follow the pushing player kinematically and can clip into shelves or walls.
+* "Ragdoll" slips are a procedural tumble (camera roll + bean tipping over), not a bone ragdoll.
+* Internet play needs a relay that isn't included (see "Adding an internet relay later").
+* The APK is signed with a debug key (fine for sideloading, not for the Play Store).
+* Releases are built by GitHub Actions (tags can't be pushed from the build environment).
+
 ## Project layout
 
 ```

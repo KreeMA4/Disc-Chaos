@@ -84,11 +84,11 @@ static func _bedroom(L: LevelLayout, rng: RandomNumberGenerator) -> void:
 	L.add_prop("pc_tower", Vector3(6.3, 0.77, 2.3), -90)
 	L.add_prop("lamp_desk", Vector3(6.35, 0.765, 1.15), -90, {"color": Color(0.3, 0.8, 0.9)})
 	L.add_prop("gaming_chair", Vector3(5.6, 0, 1.75), 90, {"color": Color(0.9, 0.35, 0.4)})
-	L.add_prop("tv_stand", Vector3(3.3, 0, 5.15), 180)
+	L.add_stash("tv_stand", Vector3(3.3, 0, 5.15), 180)
 	L.add_prop("tv", Vector3(3.3, 0.5, 5.2), 180)
 	L.add_prop("console", Vector3(2.85, 0.5, 5.1), 180, {"color": Color(0.95, 0.95, 0.97)})
-	L.add_stash("beanbag", Vector3(2.7, 0, 3.9), 20, {"color": Color(1.0, 0.55, 0.3)})
-	L.add_stash("beanbag", Vector3(4.0, 0, 4.0), -25, {"color": Color(0.45, 0.8, 0.55)})
+	L.add_stash("beanbag", Vector3(2.45, 0, 3.9), 20, {"color": Color(1.0, 0.55, 0.3)})
+	L.add_stash("beanbag", Vector3(4.45, 0, 4.1), -25, {"color": Color(0.45, 0.8, 0.55)})
 	L.add_prop("rug_round", Vector3(3.3, 0, 3.2), 0, {"r": 1.35, "color": Color(0.95, 0.6, 0.65), "color2": Color(1.0, 0.85, 0.55)})
 	L.add_prop("rug", Vector3(1.3, 0, 2.6), 0, {"w": 1.6, "d": 1.0, "color": Color(0.5, 0.75, 0.6)})
 	L.add_prop("plant_big", Vector3(1.05, 0, 5.05), 0)
@@ -122,7 +122,7 @@ static func _bedroom(L: LevelLayout, rng: RandomNumberGenerator) -> void:
 	L.add_prop("cable", Vector3(3.0, 0, 4.8), 90, {"color": Color(0.9, 0.9, 0.9)})
 	L.add_prop("laundry", Vector3(5.6, 0, 0.95), 0)
 	L.add_prop("pizza_box", Vector3(1.9, 0.0, 3.5), 15, {"stack": 2})
-	L.spawns = [Vector3(4.7, 0, 2.9), Vector3(5.2, 0, 3.5), Vector3(5.0, 0, 2.5), Vector3(5.6, 0, 3.8)]
+	L.spawns = [Vector3(4.7, 0, 2.9), Vector3(5.6, 0, 3.0), Vector3(5.0, 0, 2.4), Vector3(5.8, 0, 3.8)]
 	clutter(L, rng, 16)
 	surface_clutter(L, rng, 6)
 	L.env.sun_energy = 0.85
@@ -142,7 +142,7 @@ static func _living(L: LevelLayout, rng: RandomNumberGenerator) -> void:
 	L.add_window(Vector2(6.0, 6.6), 1.4, 1.2, 0.9)
 	L.add_window(Vector2(13.6, 4.8), 1.0, 0.9, 1.1)
 	# living room
-	L.add_prop("tv_stand", Vector3(4.0, 0, 0.3), 0, {"color": Color(0.55, 0.38, 0.28)})
+	L.add_stash("tv_stand", Vector3(4.0, 0, 0.3), 0, {"color": Color(0.55, 0.38, 0.28)})
 	L.add_prop("tv", Vector3(4.0, 0.5, 0.25), 0)
 	L.add_prop("console", Vector3(3.4, 0.5, 0.35), 0, {"color": Color(0.95, 0.95, 0.97)})
 	L.add_prop("console", Vector3(4.65, 0.5, 0.35), 0, {"color": Color(0.35, 0.2, 0.5)})

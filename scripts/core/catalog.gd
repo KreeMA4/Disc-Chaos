@@ -16,7 +16,7 @@ const VOCAB := {
 	Defs.G_KART: [["Turbo", "Nitro", "Zoom", "Skid", "Drift", "Rocket", "Hyper", "Pedal", "Rally", "Vroom"],
 		["Toast", "Muffin", "Hamster", "Taco", "Penguin", "Donut", "Corgi", "Gumdrop", "Walrus", "Pretzel"],
 		["Rally", "Grand Prix", "Derby", "Circuit", "Dash", "Cup", "Rush", "Raceway", "Showdown", "Speedway"]],
-	Defs.G_CRIME: [["Neon", "Vice-Free", "Sunset", "Harbor", "Downtown", "Midnight", "Velvet", "Chrome", "Palm", "Boulevard"],
+	Defs.G_CRIME: [["Neon", "Velvet-Free", "Sunset", "Harbor", "Downtown", "Midnight", "Velvet", "Chrome", "Palm", "Boulevard"],
 		["Heist", "Hustle", "Getaway", "Caper", "Grift", "Racket", "Shakedown", "Score", "Stakeout", "Jackpot"],
 		["Stories", "City", "Avenue", "Blocks", "Syndicate", "Streets", "District", "Nights", "Kings", "Bay"]],
 	Defs.G_MONSTER: [["Pocket", "Critter", "Fuzzy", "Pebble", "Bramble", "Puddle", "Snuggle", "Wiggle", "Twig", "Puff"],
@@ -36,7 +36,7 @@ const VOCAB := {
 		["Season", "Tour", "League", "Cup", "Jam", "Classic", "Arena", "Showcase", "Open", "Bash"]],
 	Defs.G_FIGHTING: [["Iron", "Thunder", "Brawl", "Knuckle", "Fury", "Blaze", "Crimson", "Steel", "Storm", "Savage"],
 		["Fist", "Dojo", "Rumble", "Clash", "Gauntlet", "Smash", "Tusk", "Talon", "Uppercut", "Mayhem"],
-		["Tournament", "Arena", "Legends", "Showdown", "Royale", "Federation", "Masters", "Revolution", "Ring", "Spirits"]],
+		["Tournament", "Arena", "Legends", "Showdown", "Jubilee", "Federation", "Masters", "Revolution", "Ring", "Spirits"]],
 	Defs.G_RHYTHM: [["Disco", "Groove", "Funky", "Beat", "Boogie", "Bass", "Synth", "Jazz", "Tempo", "Echo"],
 		["Llama", "Goblin", "Panda", "Robot", "Hamster", "Frog", "Duck", "Octopus", "Yak", "Moose"],
 		["Party", "Fever", "Jam", "Shuffle", "Stomp", "Remix", "Session", "Parade", "Mixtape", "Encore"]],
@@ -91,7 +91,15 @@ const BLOCKLIST := ["MARIO", "ZELDA", "HALO", "SONIC", "POKE", "FANTASY", "RESID
 	"DISHONORED", "DRAGON QUEST", "MONSTER HUNTER", "DIGIMON", "PERSONA", "ACE COMBAT", "RIDGE", "BURNOUT",
 	"WIPEOUT", "MEGA MAN", "CASTLEVANIA", "BAYONETTA", "STARDEW", "HARVEST MOON", "ANIMAL CROSSING",
 	"POCKET MONSTERS", "TETRIS", "PAC", "KART", "SMASH BROS", "MORTAL", "VICE CITY", "SAINTS", "SHENMUE",
-	"GOLDEN SUN", "CRYSTAL CHRONICLES", "SILENT STORM", "IRON FIST", "SHADOW FOX", "STEEL BATTALION"]
+	"GOLDEN SUN", "CRYSTAL CHRONICLES", "SILENT STORM", "IRON FIST", "SHADOW FOX", "STEEL BATTALION",
+	"SMASH LEGENDS", "TENNIS ARENA", "ALL-STAR", "FIGHT NIGHT", "POWER STONE", "STREET FIGHT", "VIRTUA",
+	"SOUL CAL", "BLAZBLUE", "DEAD OR ALIVE", "KILLER INSTINCT", "RIVAL SCHOOLS", "TOP SPIN", "HOT SHOTS",
+	"MECHWARRIOR", "ZONE OF THE", "SYPHON", "THIEF", "TENCHU", "CHRONO", "LUNAR", "GRANDIA", "SUIKODEN", "ROYALE", "BATTLEFRONT", "OVERWATCH"]
+## Genres whose vocabulary is generic: short names get a whimsical word so they can't match a
+## real game by accident.
+const GENERIC_GENRES := [Defs.G_SPORTS, Defs.G_FIGHTING, Defs.G_MECH, Defs.G_STEALTH, Defs.G_CRIME, Defs.G_FANTASY, Defs.G_HORROR]
+const WHIMSY := ["Pickle", "Waffle", "Llama", "Noodle", "Muffin", "Teacup", "Pudding", "Biscuit", "Walrus", "Corgi",
+	"Gumdrop", "Pretzel", "Hamster", "Goose", "Mitten", "Bagel", "Moose", "Penguin", "Sprout", "Donut"]
 
 func _ready() -> void:
 	generate()
@@ -187,6 +195,13 @@ func _make_name(rng: RandomNumberGenerator, genre: int) -> String:
 	var b: String = _pick(rng, v[1])
 	var c: String = _pick(rng, v[2])
 	var r := rng.randf()
+	var w: String = _pick(rng, WHIMSY)
+	if genre in GENERIC_GENRES:
+		if r < 0.5:
+			return "%s %s %s" % [a, b, c]
+		elif r < 0.75:
+			return "%s %s %s" % [w, b, c]
+		return "The %s %s %s" % [a, w, b]
 	if r < 0.45:
 		return "%s %s %s" % [a, b, c]
 	elif r < 0.65:

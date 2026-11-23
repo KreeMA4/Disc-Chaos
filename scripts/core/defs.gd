@@ -1,7 +1,7 @@
 class_name Defs
 ## Shared constants for DISC CHAOS: item kinds, case formats, editions, platforms, genres.
 
-const CATALOG_VERSION := 4
+const CATALOG_VERSION := 5
 const CATALOG_SEED := 0x0D15C
 
 # ---------------------------------------------------------------- item kinds

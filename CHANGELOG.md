@@ -1,5 +1,22 @@
 # Changelog
 
+### v1.0
+Polish release.
+- Rendering: every case/box format now shares one unit mesh scaled per instance, so the store's
+  ~1,000 visible items draw in ~50 batches (store draw calls roughly halved again); color grading
+  pass (richer saturation/contrast under AgX); warmer store palette with checkerboard floor.
+- Android: hardware back button pauses / goes back instead of quitting, screen stays awake while
+  playing, the host auto-saves when the app is backgrounded, VIBRATE permission for haptics,
+  Wi-Fi multicast lock for LAN discovery.
+- Tutorial is a proper overlay (touch-friendly), long titles wrap on the inspect card, HUD panels
+  take taps through the touch layer, hiding spots behind the TV.
+- Co-op: per-player walked distance on the results screen, resumed saves are re-sent to clients
+  that finished loading first.
+- Title generator hardened against accidental real-game names (extended blocklist, whimsical
+  words for generic genres).
+- Tests: level completion -> results -> unlock, per-preset performance report
+  (tools/perf_report.sh), README with playtime estimates and performance tables.
+
 ### v0.4
 The store, endless mode and carts.
 - Level 5 "Level Up Loot": a full fictional game store with ~1,550 items: storefront windows,
