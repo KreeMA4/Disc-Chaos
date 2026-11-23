@@ -356,6 +356,8 @@ func _update_activation() -> void:
 			var it: LevelState.Item = st.items[uid]
 			if it.parent >= 0 or it.bucket >= 0 or it.table >= 0 or it.holder != 0 or it.stash >= 0:
 				continue
+			if it.kind == Defs.K_CART:
+				continue   # carts are kinematic (CartNode); a loose cart must never become a tumbling rigid body
 			var d = (it.xf.origin - p).length()
 			if d < ACTIVATE_R:
 				want[uid] = minf(want.get(uid, 99.0), d)

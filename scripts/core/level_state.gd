@@ -676,9 +676,11 @@ func query_box(center: Vector3, radius: float) -> Array:
 	return out
 
 ## Ray pick against item OBBs. Returns {uid, dist} or {} .
+## A container never shadows what is inside it: when both an item and one of its ancestors
+## (cart, open case, open collector's box...) are hit, the ancestor is ignored so the deepest
+## item wins. Everything else keeps the old rule (nearest entry wins).
 func raycast(from: Vector3, dir: Vector3, max_dist: float, pad := 0.02, exclude := -1) -> Dictionary:
-	var best := {}
-	var bd := max_dist
+	var hits := {}   # uid -> entry distance
 	var mid := from + dir * max_dist * 0.5
 	for uid in query_box(mid, max_dist * 0.5 + 0.6):
 		if uid == exclude:
@@ -692,9 +694,25 @@ func raycast(from: Vector3, dir: Vector3, max_dist: float, pad := 0.02, exclude 
 		var ld := (inv.basis * dir)
 		var box := local_aabb(it).grow(pad)
 		var hit = _ray_aabb(lo, ld, box)
-		if hit != null and hit < bd:
-			bd = hit
-			best = {"uid": uid, "dist": hit}
+		if hit != null and hit < max_dist:
+			hits[uid] = hit
+	if hits.is_empty():
+		return {}
+	var shadowed := {}
+	for uid in hits:
+		var par: int = items[uid].parent
+		while par >= 0:
+			if hits.has(par):
+				shadowed[par] = true
+			par = items[par].parent
+	var best := {}
+	var bd := max_dist
+	for uid in hits:
+		if shadowed.has(uid):
+			continue
+		if hits[uid] < bd:
+			bd = hits[uid]
+			best = {"uid": uid, "dist": hits[uid]}
 	return best
 
 static func _ray_aabb(o: Vector3, d: Vector3, box: AABB):
