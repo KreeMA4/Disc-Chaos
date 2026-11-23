@@ -60,6 +60,8 @@ func _test_level(def: Dictionary, seed: int) -> void:
 	# --- buckets are sorted A-Z: target ranges don't overlap within a section
 	var sorted_ok := true
 	for sec in st.sections:
+		if sec.platform < 0:
+			continue  # Collector's section is grouped by platform, A-Z inside each bucket
 		var last := ""
 		for bid in sec.buckets:
 			var keys: Array = st.products.filter(func(p): return p.bucket == bid).map(func(p): return p.sort)

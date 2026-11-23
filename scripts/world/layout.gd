@@ -60,7 +60,24 @@ func add_prop(type: String, pos: Vector3, yaw_deg := 0.0, params := {}) -> int:
 	return props.size() - 1
 
 func add_shelf_slot(pos: Vector3, yaw_deg: float, type := "case_shelf") -> void:
-	shelf_slots.append({"pos": pos, "yaw": deg_to_rad(yaw_deg), "type": type, "room": room_at(Vector2(pos.x, pos.z)), "used": false})
+	var yaw := deg_to_rad(yaw_deg)
+	shelf_slots.append({"pos": pos, "yaw": yaw, "type": type, "room": room_at(Vector2(pos.x, pos.z)), "used": false})
+	var u: Dictionary = ShelfPlanner.UNITS[type]
+	var ext := _rotated_extent(Vector3(u.width, u.height, u.depth + 0.12), yaw)
+	obstacles.append(AABB(Vector3(pos.x - ext.x * 0.5, 0, pos.z - ext.z * 0.5), Vector3(ext.x, u.height, ext.z)))
+
+## Place `count` shelf units side by side along a wall. side: "n","s","w","e" = wall at
+## z=rect.top, z=rect.bottom, x=rect.left, x=rect.right of `rect`; start = offset along the wall.
+func shelf_run(rect: Rect2, side: String, start: float, count: int, type := "case_shelf", gap := 0.04) -> void:
+	var u: Dictionary = ShelfPlanner.UNITS[type]
+	var off: float = u.depth * 0.5 + 0.1
+	for i in count:
+		var t: float = start + i * (u.width + gap) + u.width * 0.5
+		match side:
+			"n": add_shelf_slot(Vector3(rect.position.x + t, 0, rect.position.y + off), 0, type)
+			"s": add_shelf_slot(Vector3(rect.position.x + t, 0, rect.end.y - off), 180, type)
+			"w": add_shelf_slot(Vector3(rect.position.x + off, 0, rect.position.y + t), 90, type)
+			"e": add_shelf_slot(Vector3(rect.end.x - off, 0, rect.position.y + t), -90, type)
 
 func add_stash(type: String, pos: Vector3, yaw_deg := 0.0, params := {}) -> int:
 	var pidx := add_prop(type, pos, yaw_deg, params)

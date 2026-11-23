@@ -88,6 +88,12 @@ static func spec(type: String, p := {}) -> Dictionary:
 		"shopping_basket": return {"size": Vector3(0.45, 0.25, 0.32), "collide": false}
 		"mirror_frame": return {"size": Vector3(0.9, 1.9, 0.12), "collide": true}
 		"door": return {"size": Vector3(0.95, 2.1, 0.08), "collide": false}
+		"rafter": return {"size": Vector3(p.get("len", 6.0), 0.2, 0.18), "collide": false}
+		"fireplace": return {"size": Vector3(1.6, 1.2, 0.5), "collide": true, "surface": {"w": 1.6, "d": 0.3, "h": 1.2}}
+		"crate_stack": return {"size": Vector3(0.6, 0.9, 0.6), "collide": true}
+		"cobweb": return {"size": Vector3(0.6, 0.6, 0.02), "collide": false}
+		"bulb": return {"size": Vector3(0.1, 0.5, 0.1), "collide": false}
+		"pinball": return {"size": Vector3(0.75, 1.9, 1.4), "collide": true}
 		"shelf_decor": return {"size": Vector3(1.2, 1.8, 0.3), "collide": true}
 	return {"size": Vector3(0.3, 0.3, 0.3), "collide": false}
 
@@ -496,6 +502,36 @@ static func build(k: MeshKit, type: String, xf: Transform3D, p: Dictionary, rng:
 			k.box("toon", _t(xf, 0, 0.24, 0), Vector3(0.4, 0.01, 0.27), Color(0.4, 0.1, 0.1), 0.0)
 		"mirror_frame":
 			k.box("toon", _t(xf, 0, 0.95, 0), Vector3(0.9, 1.9, 0.06), p.get("color", Color(0.95, 0.75, 0.3)), 0.03)
+		"rafter":
+			var rl: float = p.get("len", 6.0)
+			k.box("toon", _t(xf, 0, 0, 0), Vector3(rl, 0.2, 0.18), WOOD_DARK.lerp(WOOD, 0.3), 0.01)
+		"fireplace":
+			k.box("toon", _t(xf, 0, 0.6, 0), Vector3(1.6, 1.2, 0.5), Color(0.75, 0.45, 0.35), 0.02)
+			k.box("toon", _t(xf, 0, 0.42, 0.06), Vector3(0.9, 0.7, 0.42), Color(0.15, 0.1, 0.1), 0.02)
+			k.box("toon", _t(xf, 0, 1.22, 0.05), Vector3(1.8, 0.08, 0.6), WOOD_LIGHT, 0.02)
+			for i in 3:
+				k.box("toon", _tr(xf, Vector3(-0.2 + i * 0.2, 0.12, 0.1), Vector3(0, i * 0.7, 0.2)), Vector3(0.5, 0.08, 0.08), WOOD_DARK, 0.02)
+			k.sphere("emit", _t(xf, 0, 0.25, 0.12), Vector3(0.3, 0.18, 0.12), Color(2.0, 0.9, 0.3), 5, 10)
+		"crate_stack":
+			for i in 2:
+				k.box("toon", _t(xf, rng.randf_range(-0.03, 0.03), 0.22 + i * 0.45, 0, rng.randf() * 0.2), Vector3(0.6, 0.43, 0.6), Color(0.78, 0.6, 0.4).darkened(rng.randf() * 0.15), 0.015)
+		"cobweb":
+			for i in 5:
+				k.box("toon", _tr(xf, Vector3(0, 0, 0), Vector3(0, 0, i * 0.35)), Vector3(0.7, 0.004, 0.004), Color(0.9, 0.9, 0.9), 0.0)
+			for i in 3:
+				k.torus("toon", _tr(xf, Vector3(-0.3, 0.3, 0), Vector3(PI / 2, 0, 0)), 0.1 + i * 0.1, 0.002, Color(0.9, 0.9, 0.9), 10, 3, PI * 0.5)
+		"bulb":
+			k.box("toon", _t(xf, 0, 0.25, 0), Vector3(0.008, 0.5, 0.008), DARK, 0.0)
+			k.sphere("emit", _t(xf, 0, -0.02, 0), Vector3(0.05, 0.07, 0.05), Color(1.6, 1.3, 0.8), 5, 8)
+		"pinball":
+			var pc: Color = p.get("color", Color.from_hsv(rng.randf(), 0.7, 0.85))
+			k.box("toon", _tr(xf, Vector3(0, 0.95, 0.1), Vector3(0.12, 0, 0)), Vector3(0.75, 0.2, 1.2), pc, 0.03)
+			k.plane("screen", _tr(xf, Vector3(0, 1.06, 0.1), Vector3(-PI / 2 + 0.12, 0, 0)), Vector2(0.65, 1.1), Color(1, 1, 1))
+			k.box("toon", _t(xf, 0, 1.45, -0.55), Vector3(0.75, 0.8, 0.12), pc.darkened(0.2), 0.03)
+			k.box("emit", _t(xf, 0, 1.5, -0.48), Vector3(0.65, 0.6, 0.01), pc.lightened(0.4) * 1.3, 0.0)
+			for sx in [-0.3, 0.3]:
+				for sz in [-0.45, 0.6]:
+					k.box("toon", _t(xf, sx, 0.42, sz), Vector3(0.06, 0.84, 0.06), DARK, 0.01)
 		"door":
 			var dcol: Color = p.get("color", Color(0.96, 0.94, 0.9))
 			k.box("toon", _t(xf, 0, 1.05, -0.01), Vector3(1.05, 2.16, 0.04), dcol.darkened(0.12), 0.01)

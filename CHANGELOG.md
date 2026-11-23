@@ -1,5 +1,21 @@
 # Changelog
 
+### v0.3
+More levels and every edition type.
+- Level 2 "Living Room & Game Den" (~300 items, ORBIX 4/5 + Kestrel, steelbooks): sofa corner,
+  fireplace, TV wall, arcade cabinets, gaming desk, neon sign, two rooms joined by a doorway.
+- Level 3 "Basement Collector's Room" (~500 items): glass display cabinets for Collector's
+  Editions, multi-disc games, laundry room and workshop, pinball machine, low warm lighting.
+- Level 4 "Retro Attic" (~600 items): Sprocket 16 long boxes, Prism-32 jewel cases, HomeRig PC
+  big boxes with manuals, dusty fog, floating dust motes, rafters, cobwebs, dim bulbs and a
+  flashlight (L / touch button).
+- Editions: standard, steelbook (metallic embossed shader), Collector's Edition (box + case +
+  artbook + figurine + poster, every piece must be reunited), Golden Greats reprints (own
+  banner, exact match required), multi-disc games (2–4 labelled discs), retro formats.
+- Sort Scanner highlights the held item's correct case or shelf section (8 s, 20 s recharge;
+  always on in Casual mode). Results screen with stars and per-player stats; host save/resume.
+- Bot solver now solves every level; playtime estimates in tests/out/level_report.txt.
+
 ### v0.2
 Co-op and customization.
 - 1–4 player co-op over ENet with an authoritative host: grab ownership, compact events for

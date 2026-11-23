@@ -184,6 +184,37 @@ static func _environment(root: Node3D, L: LevelLayout, pd: Dictionary, out: Dict
 	we.environment = env
 	root.add_child(we)
 	out.env = env
+	if L.env.get("dust", false) and int(Settings.get_value("preset")) >= 1:
+		var dust := GPUParticles3D.new()
+		dust.amount = 220 if int(Settings.get_value("preset")) >= 2 else 110
+		dust.lifetime = 9.0
+		dust.preprocess = 9.0
+		dust.visibility_aabb = AABB(Vector3(L.bounds.position.x, 0, L.bounds.position.y), Vector3(L.bounds.size.x, 3.0, L.bounds.size.y))
+		var pm := ParticleProcessMaterial.new()
+		pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+		pm.emission_box_extents = Vector3(L.bounds.size.x * 0.5, 1.3, L.bounds.size.y * 0.5)
+		pm.gravity = Vector3(0, -0.01, 0)
+		pm.initial_velocity_min = 0.0
+		pm.initial_velocity_max = 0.05
+		pm.direction = Vector3(1, 0.2, 0)
+		pm.spread = 180.0
+		pm.turbulence_enabled = true
+		pm.turbulence_noise_strength = 0.3
+		pm.scale_min = 0.5
+		pm.scale_max = 1.2
+		dust.process_material = pm
+		var qm := QuadMesh.new()
+		qm.size = Vector2(0.012, 0.012)
+		var dm := StandardMaterial3D.new()
+		dm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		dm.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		dm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		dm.albedo_color = Color(1.0, 0.92, 0.75, 0.55)
+		qm.material = dm
+		dust.draw_pass_1 = qm
+		dust.position = Vector3(L.bounds.get_center().x, 1.4, L.bounds.get_center().y)
+		dust.name = "Dust"
+		root.add_child(dust)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-58, 38, 0)
 	sun.light_color = L.env.sun

@@ -143,6 +143,8 @@ func _prepare(p: Dictionary) -> bool:
 					return false
 	else:
 		_fix_disc_box(p, root, st.world_xf(root).origin)
+		if not st.items[root].open:
+			st.op_set_open(root, true)
 		for pc in p.pieces:
 			if st.items[pc].parent != root:
 				if not _fetch(pc):
