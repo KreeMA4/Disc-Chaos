@@ -489,6 +489,8 @@ func ev_grab(uid: int, peer: int) -> void:
 func ev_release(uid: int, xf: Transform3D, vel: Vector3, ang: Vector3, peer: int) -> void:
 	if st == null:
 		return
+	if st.items[uid].kind == Defs.K_CART:
+		xf = CartPhysics.grounded(xf)   # a cart is always put down upright on the floor
 	st.op_release(uid, xf)
 	if st.items[uid].kind == Defs.K_CART:
 		Sfx.play("thud", xf.origin)

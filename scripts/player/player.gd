@@ -265,6 +265,9 @@ func start_slip() -> void:
 	Game.on_local_slip(self)
 	# drop everything in a comedic spray
 	for uid in held():
+		if Game.st.items[uid].kind == Defs.K_CART:
+			Game.request_release(uid, CartPhysics.grounded(Game.st.items[uid].xf), Vector3.ZERO, Vector3.ZERO)
+			continue
 		var xf := Transform3D(Basis(Vector3.UP, randf() * TAU), global_position + Vector3(0, 1.0, 0) + transform.basis * Vector3(randf_range(-0.3, 0.3), 0, -0.4))
 		Game.request_release(uid, xf, transform.basis * Vector3(randf_range(-1, 1), 2.5, -2.0), Vector3(randf(), randf(), randf()) * 6.0)
 
@@ -324,7 +327,15 @@ func pushing_cart() -> int:
 	return -1
 
 func cart_xf() -> Transform3D:
-	return Transform3D(Basis(Vector3.UP, look_yaw), global_position + Basis(Vector3.UP, look_yaw) * Vector3(0, 0, -0.95))
+	return CartPhysics.pose_for(global_position, look_yaw)
+
+## Grab through here so a cart is only taken when there is room for it in front of the player.
+func _request_grab(uid: int) -> void:
+	var it: LevelState.Item = Game.st.items[uid]
+	if it.kind == Defs.K_CART and CartPhysics.blocked(get_world_3d().direct_space_state, cart_xf()):
+		Game.toast("No room for the cart here")
+		return
+	Game.request_grab(uid)
 
 func _update_cart_push() -> void:
 	var c := pushing_cart()
@@ -335,7 +346,15 @@ func _update_cart_push() -> void:
 			add_collision_exception_with(Game.carts[c].body)
 		_cart_exception = c
 	if c >= 0:
-		Game.local_cart_move(c, cart_xf())
+		var cur: Transform3D = Game.st.items[c].xf
+		var want := cart_xf()
+		var got := CartPhysics.resolve(get_world_3d().direct_space_state, cur, want)
+		if not got.origin.is_equal_approx(want.origin) and got.origin.distance_to(want.origin) < 0.6:
+			# the cart is blocked (wall, shelf): the pusher stays behind it instead of walking through
+			var off := global_position - want.origin
+			var back := got.origin + off
+			global_position = Vector3(back.x, global_position.y, back.z)
+		Game.local_cart_move(c, got)
 
 # ------------------------------------------------------------------ targeting
 func _ray() -> Array:
@@ -505,7 +524,7 @@ func _actions(delta: float) -> void:
 			inspecting = true
 			inspect_rot = Basis(Vector3.UP, PI * 0.1)
 		elif target.get("type") == "item":
-			Game.request_grab(target.uid)
+			_request_grab(target.uid)
 			_pending_inspect = true
 	if _pending_inspect and top >= 0:
 		_pending_inspect = false
@@ -548,7 +567,7 @@ func _do_grab() -> void:
 	var tt: String = target.get("type", "")
 	if top < 0:
 		if tt == "item" and st.items[target.uid].kind != Defs.K_CART:
-			Game.request_grab(target.uid)
+			_request_grab(target.uid)
 			hands.punch()
 		return
 	var hi: LevelState.Item = st.items[top]
@@ -573,7 +592,7 @@ func _do_grab() -> void:
 			elif (ti.open or ti.kind == Defs.K_CART) and st.can_insert(top, uid):
 				Game.request_insert(top, uid)
 			elif _stackable(hi) and _stackable(ti) and held().size() < MAX_STACK:
-				Game.request_grab(uid)
+				_request_grab(uid)
 			else:
 				_drop(top)
 			hands.punch()
@@ -609,7 +628,7 @@ func _do_interact() -> void:
 		"item":
 			var ti: LevelState.Item = st.items[target.uid]
 			if ti.kind == Defs.K_CART:
-				Game.request_grab(target.uid)
+				_request_grab(target.uid)
 			elif ti.kind == Defs.K_DISC and ti.parent < 0:
 				Game.request_flip(target.uid)
 			elif ti.kind == Defs.K_CASE or ti.kind == Defs.K_CEBOX:
