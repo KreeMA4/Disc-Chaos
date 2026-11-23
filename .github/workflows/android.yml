@@ -3,7 +3,8 @@ name: Android APK
 # Builds the same signed debug APK as ./build.sh and attaches it to a GitHub Release.
 # Triggers:
 #  - pushing a tag like v0.3  -> release "v0.3"
-#  - pushing a commit that changes VERSION -> release "v<VERSION>" (created if missing)
+#  - pushing a commit that changes VERSION and whose message contains "[release]"
+#    -> release "v<VERSION>" (created if missing)
 #  - manual run (workflow_dispatch)
 on:
   push:
@@ -17,6 +18,7 @@ permissions:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || contains(github.event.head_commit.message, '[release]')
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
