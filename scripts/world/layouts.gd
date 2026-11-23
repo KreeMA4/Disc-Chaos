@@ -178,9 +178,9 @@ static func _living(L: LevelLayout, rng: RandomNumberGenerator) -> void:
 	L.add_prop("controller", Vector3(3.9, 0.42, 4.6), 30)
 	# den
 	L.add_prop("desk", Vector3(13.25, 0, 1.6), -90, {"color": Color(0.25, 0.25, 0.3)})
-	L.add_prop("monitor", Vector3(13.4, 0.765, 1.25), -90)
-	L.add_prop("monitor", Vector3(13.4, 0.765, 1.95), -90)
-	L.add_prop("pc_tower", Vector3(13.35, 0.77, 2.55), -90)
+	L.add_prop("monitor", Vector3(13.4, 0.765, 1.19), -90)
+	L.add_prop("monitor", Vector3(13.4, 0.765, 1.78), -90)
+	L.add_prop("pc_tower", Vector3(13.35, 0.77, 2.19), -90)   # on the desk (spans z 0.9-2.3), not hanging off its end
 	L.add_prop("gaming_chair", Vector3(12.6, 0, 1.6), 90, {"color": Color(0.3, 0.85, 0.6)})
 	L.add_prop("arcade", Vector3(8.9, 0, 0.5), 0, {"color": Color(0.9, 0.3, 0.45)})
 	L.add_prop("arcade", Vector3(9.8, 0, 0.5), 0, {"color": Color(0.3, 0.5, 0.95)})
