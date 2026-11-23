@@ -74,6 +74,12 @@ func _client() -> void:
 			await RenderingServer.frame_post_draw
 			get_viewport().get_texture().get_image().save_png("res://tests/out/net_shot.png")
 			_l("saved net shot")
+	# B13: the client HUD clock must advance every frame, not in 2 s steps
+	var seen := {}
+	for i in 45:
+		await get_tree().process_frame
+		seen[snappedf(Game.st.elapsed, 0.0001)] = true
+	_l("clock_distinct=%d" % seen.size())
 	if idx == 1:
 		await _solve_index(1)
 	# contested grab: both clients try to grab the same item at the same moment

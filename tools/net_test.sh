@@ -26,3 +26,10 @@ fi
 # exactly one client may win a contested grab
 w=$(grep -h "holder of contested" tests/out/net_client*.txt | awk '{print $NF}' | head -1)
 grep -h "holder of contested" tests/out/net_client*.txt
+
+# B13: each client's clock advanced on (nearly) every frame between host syncs
+for c in client1 client2; do
+  n=$(grep -h "clock_distinct" tests/out/net_$c.txt | head -1 | sed 's/.*=//')
+  if [ -z "$n" ] || [ "$n" -lt 30 ]; then echo "NET TEST FAIL: $c clock only had ${n:-0} distinct values in 45 frames"; exit 1; fi
+  echo "client clock smooth ($c: $n distinct values in 45 frames)"
+done

@@ -218,6 +218,8 @@ func toggle_pause() -> void:
 
 # ------------------------------------------------------------------ game flow
 func start_solo(level_id: int, resume := false) -> void:
+	if resume and not _can_resume(level_id):
+		return
 	Net.leave(false)
 	_begin_loading()
 	if resume:
@@ -226,11 +228,22 @@ func start_solo(level_id: int, resume := false) -> void:
 		await Game.host_start_level(level_id)
 
 func host_start(level_id: int, resume := false) -> void:
+	if resume and not _can_resume(level_id):
+		return
 	_begin_loading()
 	if resume:
 		await Game.resume(level_id)
 	else:
 		await Game.host_start_level(level_id)
+
+## Checks the save before anything is loaded (and before clients are told to load): an unusable
+## save keeps the player on the current screen with a message instead of a dead loading screen.
+func _can_resume(level_id: int) -> bool:
+	var info: Dictionary = Game.save_info(level_id)
+	if SaveMigration.is_resumable(info):
+		return true
+	toast(info.message if info.message != "" else "No saved game found.")
+	return false
 
 func _begin_loading() -> void:
 	go("none")

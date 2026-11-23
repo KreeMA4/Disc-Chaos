@@ -736,7 +736,17 @@ static func _ray_aabb(o: Vector3, d: Vector3, box: AABB):
 	return maxf(tmin, 0.0)
 
 # =============================================================== serialization
-func serialize() -> PackedByteArray:
+## Transient visual flags that must never persist in a save (scanner highlight glow).
+const TRANSIENT_FLAGS := 2
+## Slot recorded for a holder that has no player slot (should not happen; restored to the floor).
+const SLOT_LOST := 99
+const MAX_RAW_BYTES := 32 * 1024 * 1024
+
+## `slot_of` (peer id -> player slot) switches to *save mode*: holders and hands are stored as
+## slot + 1 instead of the session's random peer ids and transient flags are dropped. Without it the
+## state is serialized as-is for live network sync.
+func serialize(slot_of := Callable()) -> PackedByteArray:
+	var saving := slot_of.is_valid()
 	var n := items.size()
 	var ints := PackedInt32Array()
 	ints.resize(n * 8)
@@ -746,11 +756,11 @@ func serialize() -> PackedByteArray:
 		var it: Item = items[i]
 		ints[i * 8 + 0] = it.parent
 		ints[i * 8 + 1] = int(it.open)
-		ints[i * 8 + 2] = it.holder
+		ints[i * 8 + 2] = (0 if it.holder == 0 else int(slot_of.call(it.holder)) + 1) if saving else it.holder
 		ints[i * 8 + 3] = it.bucket
 		ints[i * 8 + 4] = it.table
 		ints[i * 8 + 5] = it.stash
-		ints[i * 8 + 6] = it.flags
+		ints[i * 8 + 6] = (it.flags & ~TRANSIENT_FLAGS) if saving else it.flags
 		ints[i * 8 + 7] = 0
 		var x := it.xf
 		var vals := [x.basis.x.x, x.basis.x.y, x.basis.x.z, x.basis.y.x, x.basis.y.y, x.basis.y.z,
@@ -769,8 +779,16 @@ func serialize() -> PackedByteArray:
 	var tbs := []
 	for t in tables:
 		tbs.append(t.occupied)
+	var saved_hands := hands
+	if saving:
+		saved_hands = {}
+		for peer in hands:
+			var k := int(slot_of.call(peer)) + 1
+			if not saved_hands.has(k):
+				saved_hands[k] = []
+			(saved_hands[k] as Array).append_array(hands[peer])
 	var d := {"level": level_id, "seed": seed, "n": n, "ints": ints, "xfs": xfs, "conts": conts,
-		"bks": bks, "sts": sts, "tbs": tbs, "stats": stats, "elapsed": elapsed, "hands": hands}
+		"bks": bks, "sts": sts, "tbs": tbs, "stats": stats, "elapsed": elapsed, "hands": saved_hands}
 	var raw := var_to_bytes(d)
 	var comp := raw.compress(FileAccess.COMPRESSION_ZSTD)
 	var out := PackedByteArray()
@@ -779,13 +797,41 @@ func serialize() -> PackedByteArray:
 	out.append_array(comp)
 	return out
 
-func deserialize(bytes: PackedByteArray) -> bool:
-	if bytes.size() < 4:
-		return false
+## Decodes and structurally validates serialized state without touching anything. {} when invalid.
+static func decode(bytes: PackedByteArray) -> Dictionary:
+	if bytes.size() < 8:
+		return {}
 	var raw_size := bytes.decode_u32(0)
+	if raw_size == 0 or raw_size > MAX_RAW_BYTES:
+		return {}
 	var raw := bytes.slice(4).decompress(raw_size, FileAccess.COMPRESSION_ZSTD)
+	if raw.size() != raw_size:
+		return {}
 	var d = bytes_to_var(raw)
-	if typeof(d) != TYPE_DICTIONARY or int(d.n) != items.size():
+	if typeof(d) != TYPE_DICTIONARY:
+		return {}
+	for k in ["n", "ints", "xfs", "conts", "bks", "sts", "tbs", "stats", "elapsed"]:
+		if not d.has(k):
+			return {}
+	if typeof(d.n) != TYPE_INT or typeof(d.ints) != TYPE_PACKED_INT32_ARRAY or typeof(d.xfs) != TYPE_PACKED_FLOAT32_ARRAY:
+		return {}
+	var n: int = d.n
+	if (d.ints as PackedInt32Array).size() != n * 8 or (d.xfs as PackedFloat32Array).size() != n * 12:
+		return {}
+	if typeof(d.conts) != TYPE_ARRAY or (d.conts as Array).size() != n:
+		return {}
+	for k in ["bks", "sts", "tbs"]:
+		if typeof(d[k]) != TYPE_ARRAY:
+			return {}
+	if typeof(d.stats) != TYPE_DICTIONARY or (typeof(d.elapsed) != TYPE_FLOAT and typeof(d.elapsed) != TYPE_INT):
+		return {}
+	return d
+
+func deserialize(bytes: PackedByteArray) -> bool:
+	var d := decode(bytes)
+	if d.is_empty() or int(d.n) != items.size():
+		return false
+	if (d.bks as Array).size() != buckets.size() or (d.sts as Array).size() != stashes.size() or (d.tbs as Array).size() != tables.size():
 		return false
 	var ints: PackedInt32Array = d.ints
 	var xfs: PackedFloat32Array = d.xfs
@@ -816,6 +862,51 @@ func deserialize(bytes: PackedByteArray) -> bool:
 	recheck_all()
 	rebuild_index()
 	return true
+
+## After deserialize() of a *save file*: turns the stored holders back into this session's peers and
+## cleans transient flags. `format` is the save format (1 = legacy peer ids, 2 = player slots),
+## `peer_of_slot` maps a player slot to the peer currently playing it, `fallback_xf(uid)` gives a floor
+## transform for an item whose holder is not in this session. Returns the uids put back on the floor.
+func restore_after_load(format: int, peer_of_slot: Dictionary, fallback_xf: Callable) -> Array:
+	var raw_hands := hands
+	hands = {}
+	var released: Array = []
+	for it in items:
+		it.flags &= ~TRANSIENT_FLAGS
+		if it.holder == 0:
+			continue
+		var slot := SLOT_LOST
+		if format >= 2:
+			slot = it.holder - 1
+		elif it.holder == 1:
+			slot = 0    # legacy: peer 1 is always the host
+		var peer: int = peer_of_slot.get(slot, 0)
+		if peer != 0:
+			it.holder = peer
+		else:
+			it.holder = 0
+			it.active = false
+			var xf: Transform3D = fallback_xf.call(it.uid)
+			it.xf = xf
+			released.append(it.uid)
+	# pick-up order: the saved order for each holder, then anything the old order did not list
+	for key in raw_hands:
+		for uid in (raw_hands[key] as Array):
+			if uid >= 0 and uid < items.size() and items[uid].holder != 0:
+				var h: int = items[uid].holder
+				if not hands.has(h):
+					hands[h] = []
+				if not (hands[h] as Array).has(uid):
+					(hands[h] as Array).append(uid)
+	for it in items:
+		if it.holder != 0:
+			if not hands.has(it.holder):
+				hands[it.holder] = []
+			if not (hands[it.holder] as Array).has(it.uid):
+				(hands[it.holder] as Array).append(it.uid)
+	recheck_all()
+	rebuild_index()
+	return released
 
 func checksum() -> int:
 	var h := 0
