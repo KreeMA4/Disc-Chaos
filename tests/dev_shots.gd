@@ -10,6 +10,10 @@ func _ready() -> void:
 			level = int(a.substr(12))
 		if a.begins_with("--shots-out="):
 			out_dir = a.substr(12)
+		if a.begins_with("--preset="):
+			Settings.values["preset"] = int(a.substr(9))
+			Settings.values["render_scale"] = Settings.PRESET_DATA[int(a.substr(9))].scale
+			Settings.apply_runtime()
 	get_tree().create_timer(240).timeout.connect(func(): print("SHOTS TIMEOUT"); get_tree().quit(3))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(out_dir))
 	await get_tree().create_timer(0.5).timeout
@@ -18,6 +22,7 @@ func _ready() -> void:
 	await Game.level_loaded
 	for i in 30:
 		await get_tree().process_frame
+	Game.main.close_overlay()
 	var p: Player = Game.local_player
 	var L: LevelLayout = Game.layout
 	var views: Array = []
@@ -41,6 +46,8 @@ func _ready() -> void:
 			var o: Vector3 = it.xf.origin
 			views.append(["floor", Vector3(o.x, 0, o.z + 0.9), 0.0, -1.0])
 			break
+	var max_draws := 0
+	var max_prims := 0
 	for v in views:
 		p.global_position = v[1]
 		p.look_yaw = v[2]
@@ -48,6 +55,9 @@ func _ready() -> void:
 		for i in 20:
 			await get_tree().physics_frame
 		await _shot(v[0])
+		max_draws = maxi(max_draws, RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME))
+		max_prims = maxi(max_prims, RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME))
+	print("PERFMAX draws=%d prims=%d" % [max_draws, max_prims])
 	# grab test: target nearest item and pick it up, then inspect
 	var near: Array = Game.st.query_box(p.global_position, 3.0)
 	if not near.is_empty():

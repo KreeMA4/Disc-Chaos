@@ -63,6 +63,10 @@ func _input(event: InputEvent) -> void:
 				_drag_btn = b
 				touches[event.index] = {"role": "edit", "pos": p}
 				return
+			if b == "":
+				for r in Game.main.hud.tap_rects():
+					if (r as Rect2).has_point(event.position):
+						return
 			if b != "":
 				touches[event.index] = {"role": "btn", "btn": b}
 				_press(b)

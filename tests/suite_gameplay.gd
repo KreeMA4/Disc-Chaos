@@ -92,7 +92,30 @@ func run() -> void:
 	main.leave_to_menu()
 	await _frames(2)
 	await _cart_test(main)
+	await _completion_test(main)
 	main.queue_free()
+	await _frames(2)
+
+func _completion_test(main) -> void:
+	main.start_solo(1)
+	await Game.level_loaded
+	await _frames(3)
+	var got := {}
+	var cb := func(d): got.merge(d)
+	Game.results_ready.connect(cb)
+	var bot := BotSolver.new(Game.st, Game.local_player.global_position)
+	bot.peer = 4242
+	var ok := bot.solve()
+	for i in 120:
+		if not got.is_empty():
+			break
+		await get_tree().process_frame
+		await get_tree().create_timer(0.05).timeout
+	Game.results_ready.disconnect(cb)
+	runner.check(ok and Game.finished, "finishing every product completes the level")
+	runner.check(not got.is_empty() and int(got.get("stars", 0)) >= 1, "results screen data with %d star(s)" % int(got.get("stars", 0)))
+	runner.check(Profile.completed.has(1), "completion unlocks the next level")
+	main.leave_to_menu()
 	await _frames(2)
 
 func _cart_test(main) -> void:

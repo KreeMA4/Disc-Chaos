@@ -86,6 +86,8 @@ func _ready() -> void:
 	var iv := UIKit.vbox(8)
 	inspect_card.add_child(iv)
 	inspect_title = UIKit.label("", 36, UIKit.INK, true)
+	inspect_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	inspect_title.custom_minimum_size = Vector2(440, 0)
 	iv.add_child(inspect_title)
 	inspect_info = UIKit.label("", 26, UIKit.INK)
 	iv.add_child(inspect_info)
@@ -225,16 +227,8 @@ func _draw_cross() -> void:
 	cross.draw_circle(Vector2(15, 15), r, col)
 
 func show_tutorial() -> void:
-	tutorial = UIKit.panel()
-	tutorial.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	tutorial.position = Vector2(-560, -260)
-	tutorial.custom_minimum_size = Vector2(540, 0)
-	var v := UIKit.vbox(8)
-	tutorial.add_child(v)
-	v.add_child(UIKit.label("How to sort", 36, UIKit.INK, true))
-	var steps := "1. Find a disc and GRAB it.\n2. Look at its matching case and tap GRAB to slot it in (the case must be open — INTERACT opens it).\n3. Pick up the case, INTERACT to close it.\n4. Walk to the right platform shelf and the A–Z divider. Follow the glowing ghost and GRAB to shelve!\n\nWrong disc in a case? Hold the case, open it and INTERACT to take the disc out."
-	if not DisplayServer.is_touchscreen_available():
-		steps += "\n\nKeys: WASD move · Mouse look · E grab · F interact · Q throw · R inspect · Tab scanner"
-	v.add_child(UIKit.label(steps, 24, UIKit.INK))
-	v.add_child(UIKit.button("Got it!", UIKit.TEAL, func(): tutorial.queue_free(), 30, 72))
-	add_child(tutorial)
+	Game.main.overlay("tutorial")
+
+## Screen rects of HUD widgets that take taps (touch controls leave these alone).
+func tap_rects() -> Array:
+	return [top_panel.get_global_rect()] if top_panel and top_panel.visible else []

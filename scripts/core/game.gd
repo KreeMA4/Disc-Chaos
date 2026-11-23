@@ -43,6 +43,8 @@ var _bucket_grid := {}
 var _scanner_marker: MeshInstance3D
 var _highlighted := -1
 var carts := {}                  # uid -> CartNode
+var _dist_sent := 0.0
+var _dist_t := 0.0
 var _cart_t := 0.0
 
 func _ready() -> void:
@@ -68,6 +70,9 @@ func host_start_level(id: int, seed := -1, resume_bytes := PackedByteArray()) ->
 		for it in st.items:
 			world._dirty[it.uid] = true
 		progress_changed.emit()
+		# clients that finished loading first got the fresh state: resend the resumed one
+		if multiplayer.has_multiplayer_peer() and multiplayer.get_peers().size() > 0:
+			ev_full_state.rpc(st.serialize(), _active_list())
 	# give clients the authoritative state once they finished loading (they ask via srv_ready)
 
 @rpc("authority", "call_remote", "reliable")
@@ -148,6 +153,7 @@ func load_level(id: int, seed: int, wh_items := 400) -> void:
 	load_progress.emit(1.0, "Ready!")
 	running = true
 	finished = false
+	_dist_sent = 0.0
 	scanner_t = 0.0
 	scanner_cd = 0.0
 	Sfx.play_music(int(level_def.get("music", 0)))
@@ -232,6 +238,14 @@ func _process(delta: float) -> void:
 			var snap := world.pack_snapshot()
 			if (snap[0] as PackedInt32Array).size() > 0:
 				ev_snap.rpc(snap[0], snap[1])
+	# each peer reports its walked distance for the results screen
+	_dist_t -= delta
+	if _dist_t <= 0.0 and local_player and not finished:
+		_dist_t = 4.0
+		var d := local_player.distance_walked - _dist_sent
+		if d > 0.5:
+			_dist_sent = local_player.distance_walked
+			_call_host("stat_self", ["distance", d])
 	# scanner
 	if scanner_cd > 0.0:
 		scanner_cd -= delta
@@ -646,9 +660,9 @@ func _on_product_changed(pid: int, solved: bool) -> void:
 
 func _finish() -> void:
 	finished = true
-	var dist := {}
 	if local_player:
-		_stat(me(), "distance", local_player.distance_walked)
+		_stat(me(), "distance", local_player.distance_walked - _dist_sent)
+		_dist_sent = local_player.distance_walked
 	ev_complete.rpc(st.elapsed)
 
 @rpc("authority", "call_local", "reliable")

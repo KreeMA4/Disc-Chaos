@@ -95,6 +95,24 @@ func _handle_cmdline() -> void:
 			nt.mode = a
 			add_child(nt)
 
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_WM_GO_BACK_REQUEST:
+			# Android back button: pause in a level, close overlays, or step back in menus.
+			if has_overlay():
+				close_overlay()
+			elif Game.running:
+				toggle_pause()
+			elif current and current.get_script() != preload("res://scripts/ui/main_menu.gd"):
+				Net.leave(false)
+				go("menu")
+		NOTIFICATION_APPLICATION_PAUSED:
+			if Game.running and Game.is_host() and Game.st and not Game.finished:
+				Game.save_game()
+		NOTIFICATION_APPLICATION_FOCUS_OUT:
+			if Game.running and not has_overlay() and not Net.is_online():
+				overlay("pause")
+
 func _apply_safe_area() -> void:
 	var sa := DisplayServer.get_display_safe_area()
 	var ws := DisplayServer.window_get_size()
@@ -170,6 +188,7 @@ func overlay(name: String, arg = null) -> Control:
 		"emotes": s = preload("res://scripts/ui/emote_wheel.gd").new()
 		"chat": s = preload("res://scripts/ui/emote_wheel.gd").new(); s.chat_mode = true
 		"customize": s = preload("res://scripts/ui/customize.gd").new()
+		"tutorial": s = preload("res://scripts/ui/tutorial.gd").new()
 	if s == null:
 		return null
 	if arg != null and "arg" in s:
@@ -230,6 +249,7 @@ func _on_load_progress(frac: float, text: String) -> void:
 	loading.set_progress(frac, text)
 
 func _on_level_loaded() -> void:
+	DisplayServer.screen_set_keep_on(true)
 	loading.visible = false
 	if backdrop:
 		backdrop.queue_free()
@@ -248,6 +268,7 @@ func _on_results(data: Dictionary) -> void:
 	Game.delete_save(data.level.id)
 
 func leave_to_menu(msg := "") -> void:
+	DisplayServer.screen_set_keep_on(false)
 	close_overlay()
 	Net.leave(false)
 	Game.unload_level()

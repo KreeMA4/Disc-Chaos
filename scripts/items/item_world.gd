@@ -8,7 +8,7 @@ extends Node3D
 
 signal body_hit(uid: int, speed: float)
 
-const CHUNK := 6.0
+const CHUNK := 10.0
 const START_CAP := 32
 var ACTIVATE_R := 2.1
 var MAX_ACTIVE := 90
@@ -116,7 +116,9 @@ func _refresh(uid: int) -> void:
 			var t := clampf(a.t / a.dur, 0.0, 1.0)
 			t = 1.0 - pow(1.0 - t, 3.0)
 			xf = (a.from as Transform3D).interpolate_with(xf, t)
-		var key := ItemMeshes.render_key(it)
+		var mk := ItemMeshes.mm_key(it)
+		var key: String = mk[0]
+		xf = xf * Transform3D(Basis.from_scale(mk[1]), Vector3.ZERO)
 		var chunk := Vector2i(floori(xf.origin.x / CHUNK), floori(xf.origin.z / CHUNK))
 		var mmi := _get_mmi(chunk, key, it.kind)
 		if _slot.has(uid) and _slot[uid][0] != mmi:
@@ -166,8 +168,8 @@ func _get_mmi(chunk: Vector2i, key: String, kind: int) -> MultiMeshInstance3D:
 	var d: Dictionary = _chunks[chunk]
 	if d.has(key):
 		return d[key]
-	var mmi := _new_mmi(ItemMeshes.mesh(key), kind, "MM_%d_%d_%s" % [chunk.x, chunk.y, key])
-	var lo_mesh := ItemMeshes.mesh_lod(key)
+	var mmi := _new_mmi(ItemMeshes.unit_mesh(key), kind, "MM_%d_%d_%s" % [chunk.x, chunk.y, key])
+	var lo_mesh := ItemMeshes.unit_mesh(key, true)
 	if lo_mesh != mmi.multimesh.mesh:
 		var lo := _new_mmi(lo_mesh, kind, mmi.name + "_lod")
 		mmi.visibility_range_end = LOD_DIST

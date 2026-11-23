@@ -12,6 +12,7 @@ config/icon="res://icon.png"
 boot_splash/bg_color=Color(0.99, 0.84, 0.45, 1)
 boot_splash/show_image=false
 run/max_fps=60
+config/quit_on_go_back=false
 
 [autoload]
 

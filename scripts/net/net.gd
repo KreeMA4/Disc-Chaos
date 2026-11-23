@@ -289,6 +289,9 @@ func _stop_beacon() -> void:
 func start_listening() -> void:
 	stop_listening()
 	_listener = PacketPeerUDP.new()
+	# On Android, enabling broadcast makes Godot acquire the Wi-Fi multicast lock
+	# (CHANGE_WIFI_MULTICAST_STATE), without which many phones drop incoming broadcasts.
+	_listener.set_broadcast_enabled(true)
 	var err := _listener.bind(DISCOVERY_PORT, "*")
 	if err != OK:
 		_listener = null

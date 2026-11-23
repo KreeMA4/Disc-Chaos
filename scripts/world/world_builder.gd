@@ -174,7 +174,7 @@ static func _environment(root: Node3D, L: LevelLayout, pd: Dictionary, out: Dict
 	env.background_color = L.env.sky_top
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = L.env.ambient
-	env.ambient_light_energy = L.env.ambient_energy
+	env.ambient_light_energy = L.env.ambient_energy * 0.92
 	env.tonemap_mode = Environment.TONE_MAPPER_AGX
 	env.tonemap_exposure = 1.05
 	env.glow_enabled = pd.glow
@@ -184,8 +184,9 @@ static func _environment(root: Node3D, L: LevelLayout, pd: Dictionary, out: Dict
 	env.glow_hdr_threshold = 1.0
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.12
-	env.adjustment_contrast = 1.03
+	env.adjustment_saturation = 1.28
+	env.adjustment_contrast = 1.07
+	env.adjustment_brightness = 0.98
 	if L.env.fog:
 		env.fog_enabled = true
 		env.fog_light_color = L.env.fog_color

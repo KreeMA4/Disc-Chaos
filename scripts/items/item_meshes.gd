@@ -59,6 +59,68 @@ static func mesh_lod(key: String) -> ArrayMesh:
 	_cache[lk] = m
 	return m
 
+## Batched (MultiMesh) key + per-instance scale. All case/box formats share one unit mesh so the
+## whole floor of cases is a single draw call per chunk.
+static func mm_key(it: LevelState.Item) -> Array:
+	var s := Defs.item_size(it.kind, it.fmt)
+	match it.kind:
+		Defs.K_CASE:
+			if it.open:
+				if LevelState.is_flip_case(it):
+					return ["u_case_open", s]
+				return ["u_box_open", s]
+			return ["u_case", s]
+		Defs.K_CEBOX:
+			return ["u_box_open" if it.open else "u_case", s]
+		Defs.K_ARTBOOK, Defs.K_MANUAL:
+			return ["u_case", s]
+		Defs.K_DISC:
+			return ["u_disc", Vector3(s.x, 1.0, s.z)]
+		Defs.K_POSTER:
+			return ["poster", Vector3.ONE]
+		Defs.K_FIGURE:
+			return ["figure", Vector3.ONE]
+	return [render_key(it), Vector3.ONE]
+
+## Unit meshes (1 m) scaled per instance.
+static func unit_mesh(key: String, lod := false) -> ArrayMesh:
+	var ck := key + ("#lod" if lod else "")
+	if _cache.has(ck):
+		return _cache[ck]
+	if not key.begins_with("u_"):
+		_cache[ck] = mesh_lod(key) if lod else mesh(key)
+		return _cache[ck]
+	var k := MeshKit.new()
+	k.uv_mode = true
+	k.ao_enabled = false
+	var bev := 0.0 if lod else 0.03
+	match key:
+		"u_case":
+			k.box("m", Transform3D(), Vector3.ONE, Color.WHITE, bev, {"+z": 0, "-z": 1, "-x": 2})
+		"u_case_open":
+			k.box("m", Transform3D(Basis(), Vector3(0, 0, -0.25)), Vector3(1, 1, 0.5), Color.WHITE, bev * 0.5, {"-z": 1})
+			k.box("m", Transform3D(Basis(), Vector3(-0.5 - 0.06, 0, -0.25)), Vector3(0.12, 1, 0.5), Color.WHITE, 0.0, {"-z": 2})
+			k.box("m", Transform3D(Basis(), Vector3(-1.12, 0, -0.25)), Vector3(1, 1, 0.5), Color.WHITE, bev * 0.5, {"-z": 0})
+			if not lod:
+				k.cylinder("m", Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(0, 0, 0.02)), 0.09, 0.04, Color.WHITE, 12)
+		"u_box_open":
+			if lod:
+				k.box("m", Transform3D(), Vector3.ONE, Color.WHITE, 0.0, {"+z": 0, "-z": 1, "-x": 2})
+			else:
+				var w := 0.04
+				k.box("m", Transform3D(Basis(), Vector3(0, 0, 0.5 - w * 0.5)), Vector3(1, 1, w), Color.WHITE, 0.0, {"+z": 0})
+				k.box("m", Transform3D(Basis(), Vector3(0, 0, -0.5 + w * 0.5)), Vector3(1, 1, w), Color.WHITE, 0.0, {"-z": 1})
+				k.box("m", Transform3D(Basis(), Vector3(-0.5 + w * 0.5, 0, 0)), Vector3(w, 1, 1), Color.WHITE, 0.0, {"-x": 2})
+				k.box("m", Transform3D(Basis(), Vector3(0.5 - w * 0.5, 0, 0)), Vector3(w, 1, 1), Color.WHITE, 0.0)
+				k.box("m", Transform3D(Basis(), Vector3(0, -0.5 + w * 0.5, 0)), Vector3(1, w, 1), Color.WHITE, 0.0)
+				var lid := Transform3D(Basis(Vector3.RIGHT, -PI * 0.55), Vector3(0, 0.5, -0.5)) * Transform3D(Basis(), Vector3(0, 0, 0.5))
+				k.box("m", lid, Vector3(1.02, w, 1.02), Color.WHITE, 0.0)
+		"u_disc":
+			k.cylinder("m", Transform3D(), 0.5, Defs.DISC_THICK, Color.WHITE, 10 if lod else 22, -1.0, true, 0.0 if lod else 0.05, 0, 1, 2)
+	var m := k.build_mesh("m")
+	_cache[ck] = m
+	return m
+
 static func mesh(key: String) -> ArrayMesh:
 	if _cache.has(key):
 		return _cache[key]
