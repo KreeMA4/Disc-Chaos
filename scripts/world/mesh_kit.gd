@@ -11,8 +11,10 @@ var ao_enabled := true
 var ao_floor := 0.0      # world y of the floor for AO
 var ao_strength := 0.38
 var uv_mode := false     # item meshes encode face ids in UV.x
+var remap := {}          # channel rename (e.g. route a prop's "screen" to "screen2")
 
 func _arr(name: String) -> Dictionary:
+	name = remap.get(name, name)
 	if not ch.has(name):
 		ch[name] = {"v": PackedVector3Array(), "n": PackedVector3Array(), "c": PackedColorArray(), "uv": PackedVector2Array()}
 	return ch[name]

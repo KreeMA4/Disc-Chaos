@@ -38,7 +38,8 @@ void fragment() {
 			c = vec3(0.8, 0.82, 0.86);
 		}
 	} else if (mode == 3) {
-		c = plastic.rgb;
+		c = face < 0.5 ? vec3(1.0) : (face < 1.5 ? vec3(0.12, 0.09, 0.18) : plastic.rgb);
+		rough = 0.5;
 	} else {
 		if (face < 0.5) c = texture(front_tex, uv).rgb;
 		else if (face < 1.5) c = texture(back_tex, uv).rgb;

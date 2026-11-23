@@ -15,6 +15,7 @@ func _ready() -> void:
 	var suites := {
 		"scripts": preload("res://tests/suite_scripts.gd"),
 		"levels": preload("res://tests/suite_levels.gd"),
+		"gameplay": preload("res://tests/suite_gameplay.gd"),
 	}
 	for name in suites:
 		if suite != "all" and suite != name:

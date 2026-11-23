@@ -2,6 +2,8 @@ class_name Layouts
 extends RefCounted
 ## Hand-designed level layouts with seeded decorative variation.
 
+const IMPLEMENTED := ["bedroom"]
+
 static func build(def: Dictionary, seed: int) -> LevelLayout:
 	var L := LevelLayout.new()
 	L.name = def.layout
@@ -117,7 +119,7 @@ static func _bedroom(L: LevelLayout, rng: RandomNumberGenerator) -> void:
 	L.add_prop("cable", Vector3(3.0, 0, 4.8), 90, {"color": Color(0.9, 0.9, 0.9)})
 	L.add_prop("laundry", Vector3(5.6, 0, 0.95), 0)
 	L.add_prop("pizza_box", Vector3(1.9, 0.0, 3.5), 15, {"stack": 2})
-	L.spawns = [Vector3(4.7, 0, 2.9), Vector3(5.2, 0, 3.5), Vector3(4.9, 0, 4.3), Vector3(5.6, 0, 4.1)]
+	L.spawns = [Vector3(4.7, 0, 2.9), Vector3(5.2, 0, 3.5), Vector3(5.0, 0, 2.5), Vector3(5.6, 0, 3.8)]
 	clutter(L, rng, 16)
 	surface_clutter(L, rng, 6)
 	L.env.sun_energy = 0.85

@@ -141,15 +141,6 @@ func _setup_input() -> void:
 	lt.axis = JOY_AXIS_TRIGGER_LEFT
 	lt.axis_value = 1.0
 	InputMap.action_add_event("inspect", lt)
-	var mb := InputEventMouseButton.new()
-	mb.button_index = MOUSE_BUTTON_LEFT
-	InputMap.action_add_event("grab", mb)
-	var mr := InputEventMouseButton.new()
-	mr.button_index = MOUSE_BUTTON_RIGHT
-	InputMap.action_add_event("throw", mr)
-	var mm := InputEventMouseButton.new()
-	mm.button_index = MOUSE_BUTTON_MIDDLE
-	InputMap.action_add_event("inspect", mm)
 
 func _axis(action: String, axis: int, v: float) -> void:
 	if not InputMap.has_action(action):

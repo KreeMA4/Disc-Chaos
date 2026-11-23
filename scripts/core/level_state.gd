@@ -35,6 +35,7 @@ var buckets: Array = []       # {id, section, label, xf, width, depth, height, i
 var stashes: Array = []       # {id, items:[], revealed, spill:Vector3, type}
 var tables: Array = []        # {id, xf, cells: Vector2i, cell_size: Vector2, occupied: {cell: uid}}
 var solved_count := 0
+var hands := {}               # peer -> Array[int] held uids in pick-up order (top = last)
 var stats := {}               # player name -> {sorted, mistakes, slips, distance, throws}
 var elapsed := 0.0
 
@@ -223,6 +224,16 @@ func detach(uid: int) -> void:
 	_unindex(uid)
 	_check_product(it.product)
 
+func held_by(peer: int) -> Array:
+	return hands.get(peer, [])
+
+func _unhold(uid: int) -> void:
+	var it: Item = items[uid]
+	if it.holder != 0:
+		var arr: Array = hands.get(it.holder, [])
+		arr.erase(uid)
+	it.holder = 0
+
 # =============================================================== ops (return true on success)
 func op_grab(uid: int, peer: int) -> bool:
 	var it := item(uid)
@@ -235,6 +246,9 @@ func op_grab(uid: int, peer: int) -> bool:
 	detach(uid)
 	it.holder = peer
 	it.active = false
+	if not hands.has(peer):
+		hands[peer] = []
+	(hands[peer] as Array).append(uid)
 	_unindex_tree(uid)
 	item_changed.emit(uid)
 	return true
@@ -246,12 +260,20 @@ func op_release(uid: int, xf: Transform3D) -> bool:
 		return false
 	if it.parent >= 0 or it.bucket >= 0 or it.table >= 0:
 		detach(uid)
-	it.holder = 0
+	_unhold(uid)
 	it.xf = xf
 	_index_tree(uid)
 	item_changed.emit(uid)
 	_check_product(it.product)
 	return true
+
+## Release everything a peer holds at a position (disconnects, slips).
+func release_all(peer: int, at: Vector3) -> Array:
+	var out: Array = []
+	for uid in (hands.get(peer, []) as Array).duplicate():
+		op_release(uid, Transform3D(Basis(), at + Vector3(randf_range(-0.2, 0.2), 0.3 + out.size() * 0.05, randf_range(-0.2, 0.2))))
+		out.append(uid)
+	return out
 
 ## Update a free item's transform (physics/network).
 func op_move(uid: int, xf: Transform3D) -> void:
@@ -267,7 +289,7 @@ func op_insert(child_uid: int, cont_uid: int) -> bool:
 	var child: Item = items[child_uid]
 	var cont: Item = items[cont_uid]
 	detach(child_uid)
-	child.holder = 0
+	_unhold(child_uid)
 	child.parent = cont_uid
 	cont.contents.append(child_uid)
 	child.xf = slot_xf(cont, child, cont.contents.size() - 1)
@@ -296,6 +318,9 @@ func op_eject(cont_uid: int, peer: int, out_xf: Transform3D, which := -1) -> int
 	var it: Item = items[c]
 	if peer != 0:
 		it.holder = peer
+		if not hands.has(peer):
+			hands[peer] = []
+		(hands[peer] as Array).append(c)
 		_unindex_tree(c)
 	else:
 		it.xf = out_xf
@@ -347,7 +372,7 @@ func op_shelve(uid: int, bid: int) -> bool:
 	if not bucket_has_room(bid, uid):
 		return false
 	detach(uid)
-	it.holder = 0
+	_unhold(uid)
 	it.open = false if it.kind == Defs.K_CASE else it.open
 	it.bucket = bid
 	var arr: Array = b.items
@@ -366,7 +391,7 @@ func op_table(uid: int, table_id: int, cell: int) -> bool:
 	if (t.occupied as Dictionary).has(cell):
 		return false
 	detach(uid)
-	it.holder = 0
+	_unhold(uid)
 	it.table = table_id * 100 + cell
 	t.occupied[cell] = uid
 	it.xf = table_cell_xf(table_id, cell, it)
@@ -713,7 +738,7 @@ func serialize() -> PackedByteArray:
 	for t in tables:
 		tbs.append(t.occupied)
 	var d := {"level": level_id, "seed": seed, "n": n, "ints": ints, "xfs": xfs, "conts": conts,
-		"bks": bks, "sts": sts, "tbs": tbs, "stats": stats, "elapsed": elapsed}
+		"bks": bks, "sts": sts, "tbs": tbs, "stats": stats, "elapsed": elapsed, "hands": hands}
 	var raw := var_to_bytes(d)
 	var comp := raw.compress(FileAccess.COMPRESSION_ZSTD)
 	var out := PackedByteArray()
@@ -755,6 +780,7 @@ func deserialize(bytes: PackedByteArray) -> bool:
 		tables[ti].occupied = d.tbs[ti]
 	stats = d.stats
 	elapsed = d.elapsed
+	hands = d.get("hands", {})
 	recheck_all()
 	rebuild_index()
 	return true

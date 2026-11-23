@@ -59,7 +59,8 @@ void item_shade(vec2 uv_in, vec4 custom, vec4 plastic, vec3 nrm, vec3 view, out 
 			c = vec3(0.8, 0.82, 0.86);
 		}
 	} else if (mode == 3) {
-		c = plastic.rgb;
+		c = face < 0.5 ? vec3(1.0) : (face < 1.5 ? vec3(0.12, 0.09, 0.18) : plastic.rgb);
+		rough = 0.5;
 	} else {
 		if (face < 0.5) {
 			c = cell_sample(covers, cover_grid, cover_cell, custom.r, uv).rgb;
