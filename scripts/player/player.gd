@@ -199,6 +199,7 @@ func _physics_process(delta: float) -> void:
 	var moved := Vector2(global_position.x - before.x, global_position.z - before.z).length()
 	distance_walked += moved
 	_handle_player_bumps()
+	_guard_bounds()
 	_update_cart_push()
 	# --- crouch eye height, bob, slip tumble
 	var eye := EYE_CROUCH if crouching else EYE
@@ -285,6 +286,33 @@ func apply_bump(push: Vector3) -> void:
 	bean.bump(2.0)
 	if push.length() > 4.5 and randf() < 0.3:
 		start_slip()
+
+# ------------------------------------------------------------------ out-of-bounds recovery
+var _safe_pos := Vector3.ZERO
+var _safe_set := false
+var oob_recoveries := 0
+
+## Last line of defence: if the player ever ends up outside the map footprint (or falls through
+## the world) they are put back at the last good floor position. Colliders should make this
+## unreachable; this keeps a missed gap from stranding or losing a player.
+func _guard_bounds() -> void:
+	var L: LevelLayout = Game.layout
+	if L == null:
+		return
+	var out := not L.is_inside(global_position) or global_position.y < -2.0 or global_position.y > 12.0
+	if not out:
+		if is_on_floor():
+			_safe_pos = global_position
+			_safe_set = true
+		return
+	var to: Vector3 = Vector3(0, 0.05, 0)
+	if _safe_set:
+		to = _safe_pos
+	elif not L.spawns.is_empty():
+		to = (L.spawns[0] as Vector3) + Vector3(0, 0.05, 0)
+	global_position = to
+	velocity = Vector3.ZERO
+	oob_recoveries += 1
 
 # ------------------------------------------------------------------ carts
 var _cart_exception := -1

@@ -19,6 +19,7 @@ func _ready() -> void:
 		"sweep": preload("res://tests/suite_sweep.gd"),
 		"reg_misc": preload("res://tests/reg_misc.gd"),
 		"reg_targeting": preload("res://tests/reg_targeting.gd"),
+		"reg_world": preload("res://tests/reg_world.gd"),
 	}
 	for name in suites:
 		if suite != "all" and suite != name:

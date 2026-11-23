@@ -356,6 +356,18 @@ static func _wall(k: MeshKit, seg: Dictionary, L: LevelLayout, rng: RandomNumber
 		_collider(statics, AABB(Vector3(p2.x - ext.x * 0.5, y0, p2.y - ext.z * 0.5), Vector3(ext.x, y1 - y0, ext.z)))
 		if w > 0.8 and y1 - y0 > 1.2:
 			_occluder(statics.get_parent(), Transform3D(basis, Vector3(p2.x, (y0 + y1) * 0.5, p2.y)), Vector3(w, y1 - y0, 0.05))
+	# window panes: the glass is solid for players and items (a window is a hole in the visible wall,
+	# never a way out of the map)
+	for ho in holes:
+		if not ho.window:
+			continue
+		var wt0 := clampf(ho.t0, 0.0, length)
+		var wt1 := clampf(ho.t1, 0.0, length)
+		if wt1 - wt0 < 0.01:
+			continue
+		var wm := a + dir * ((wt0 + wt1) * 0.5)
+		var wext := LevelLayout._rotated_extent(Vector3(wt1 - wt0, ho.y1 - ho.y0, wt + 0.04), yaw)
+		_collider(statics, AABB(Vector3(wm.x - wext.x * 0.5, ho.y0, wm.y - wext.z * 0.5), Vector3(wext.x, ho.y1 - ho.y0, wext.z)))
 	# door frames
 	for ho in holes:
 		if ho.window:
