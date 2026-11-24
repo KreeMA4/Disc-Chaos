@@ -5,13 +5,22 @@ name: Android APK
 #  - pushing a tag like v0.3  -> release "v0.3"
 #  - pushing a commit that changes VERSION and whose message contains "[release]"
 #    -> release "v<VERSION>" (created if missing)
-#  - manual run (workflow_dispatch)
+#  - manual run (workflow_dispatch): BUILD ONLY by default - the APK is attached to the run as an
+#    artifact and nothing is published. Tick "publish" to also create/update the release.
+# Every run verifies that the APK is signed with the same certificate as v1.0-v1.0.x
+# (EXPECTED_CERT_SHA256), so an APK that Android would refuse to install over an existing
+# install can never be published or handed out. The debug keystore lives only in the Actions cache.
 on:
   push:
     branches: ["**"]
     tags: ["v*"]
     paths: ["VERSION"]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Also publish/update the GitHub release (off = build only, APK as run artifact)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -23,6 +32,8 @@ jobs:
     timeout-minutes: 60
     env:
       TOOLS_DIR: ${{ github.workspace }}/.toolchain
+      # SHA-256 of the signing certificate of every release so far (v0.1 ... v1.0). Public value.
+      EXPECTED_CERT_SHA256: 75c3e1fd88c93163d67a34f4d680d5b93442806e9510a14087cef59d08492178
     steps:
       - uses: actions/checkout@v4
 
@@ -31,7 +42,8 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Cache toolchain
+      - name: Cache toolchain (holds the debug signing keystore)
+        id: toolchain-cache
         uses: actions/cache@v4
         with:
           path: |
@@ -44,6 +56,20 @@ jobs:
           export ANDROID_SDK_ROOT="$TOOLS_DIR/android-sdk"
           ./build.sh
 
+      - name: Verify signing certificate matches v1.0
+        run: |
+          echo "toolchain cache hit: ${{ steps.toolchain-cache.outputs.cache-hit }}"
+          APK=$(ls build/DiscChaos-v*.apk | head -1)
+          GOT=$("$TOOLS_DIR/android-sdk/build-tools/35.0.1/apksigner" verify --print-certs "$APK" 2>/dev/null \
+            | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
+          echo "APK:      $APK"
+          echo "got:      $GOT"
+          echo "expected: $EXPECTED_CERT_SHA256"
+          if [ "$GOT" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::APK is signed with a different key than v1.0 (toolchain cache miss?). Android would refuse to update an existing install with it. Not publishing or uploading."
+            exit 1
+          fi
+
       - name: Determine tag
         id: tag
         run: |
@@ -54,6 +80,7 @@ jobs:
           fi
 
       - name: Publish release
+        if: github.event_name != 'workflow_dispatch' || inputs.publish
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
@@ -71,3 +98,5 @@ jobs:
         with:
           name: DiscChaos-apk
           path: build/DiscChaos-v*.apk
+          if-no-files-found: error
+          retention-days: 14
