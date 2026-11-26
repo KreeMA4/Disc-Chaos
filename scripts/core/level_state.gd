@@ -165,7 +165,11 @@ func slot_xf(cont: Item, child: Item, index: int) -> Transform3D:
 	match cont.kind:
 		Defs.K_CASE:
 			if child.kind == Defs.K_DISC:
-				var dz := -s.z * 0.5 + 0.004 + index * 0.0045
+				# The disc sits ON the tray of the open case, label towards the viewer. The open mesh
+				# (ItemMeshes._case_open / _box_open) has its tray surface at z = 0 for flip cases and at
+				# the inner face of the back wall for boxes; the disc used to be placed at the *outer*
+				# back, i.e. inside the solid back panel, so it was invisible whenever the case was open.
+				var dz := _tray_z(cont) + DISC_REST + index * 0.0045
 				var off := Vector3(0.0, 0.0, dz)
 				if index > 0:
 					off.x += 0.012 * index
@@ -191,6 +195,15 @@ func slot_xf(cont: Item, child: Item, index: int) -> Transform3D:
 			var layer := index / 15
 			return Transform3D(Basis(Vector3.RIGHT, -PI * 0.5), Vector3(-0.2 + col * 0.2, 0.55 + layer * 0.06, -0.34 + row * 0.17))
 	return Transform3D()
+
+## Disc centre height above the tray surface: hub (4 mm) + half the disc thickness + a hair.
+const DISC_REST := 0.0065
+
+## z of the surface a disc rests on inside an open case (case-local, +z = towards the cover art).
+func _tray_z(cont: Item) -> float:
+	if is_flip_case(cont):
+		return 0.0                                   # inner face of the back panel (z in [-depth/2, 0])
+	return -size_of(cont).z * 0.5 + 0.006 - 0.0045   # inner face of a box's back wall (6 mm thick)
 
 func _relayout_contents(cont: Item) -> void:
 	for i in cont.contents.size():
@@ -676,9 +689,17 @@ func query_box(center: Vector3, radius: float) -> Array:
 	return out
 
 ## Ray pick against item OBBs. Returns {uid, dist} or {} .
+## A container never shadows what is inside it: when both an item and one of its ancestors
+## (cart, open case, open collector's box...) are hit, the ancestor is ignored so the deepest
+## item wins.
+## Precision (M1.1): the box of an item is tested exactly first and the nearest exact hit wins;
+## only when nothing is hit exactly does the `pad` tolerance (touch-friendly aiming) apply, and
+## then the item whose centre is closest to the ray is chosen. Previously the nearest *padded*
+## box won, so on a pile of thin discs the neighbouring item was often picked instead of the one
+## under the crosshair.
 func raycast(from: Vector3, dir: Vector3, max_dist: float, pad := 0.02, exclude := -1) -> Dictionary:
-	var best := {}
-	var bd := max_dist
+	var exact := {}    # uid -> entry distance (exact box)
+	var padded := {}   # uid -> [entry distance, distance of the item's centre from the ray]
 	var mid := from + dir * max_dist * 0.5
 	for uid in query_box(mid, max_dist * 0.5 + 0.6):
 		if uid == exclude:
@@ -690,11 +711,38 @@ func raycast(from: Vector3, dir: Vector3, max_dist: float, pad := 0.02, exclude 
 		var inv := wxf.affine_inverse()
 		var lo := inv * from
 		var ld := (inv.basis * dir)
-		var box := local_aabb(it).grow(pad)
-		var hit = _ray_aabb(lo, ld, box)
-		if hit != null and hit < bd:
-			bd = hit
-			best = {"uid": uid, "dist": hit}
+		var local := local_aabb(it)
+		var hit_exact = _ray_aabb(lo, ld, local)
+		if hit_exact != null and hit_exact < max_dist:
+			exact[uid] = hit_exact
+			continue
+		var hit = _ray_aabb(lo, ld, local.grow(pad))
+		if hit != null and hit < max_dist:
+			var centre := wxf * local.get_center()
+			var off := centre - from
+			var perp := (off - dir * off.dot(dir)).length()
+			padded[uid] = [hit, perp]
+	var use_exact := not exact.is_empty()
+	if not use_exact and padded.is_empty():
+		return {}
+	# ancestors of any hit item are shadowed by it
+	var shadowed := {}
+	var pool: Dictionary = exact if use_exact else padded
+	for uid in pool:
+		var par: int = items[uid].parent
+		while par >= 0:
+			if pool.has(par):
+				shadowed[par] = true
+			par = items[par].parent
+	var best := {}
+	var bd := INF
+	for uid in pool:
+		if shadowed.has(uid):
+			continue
+		var score: float = pool[uid] if use_exact else pool[uid][1]
+		if score < bd:
+			bd = score
+			best = {"uid": uid, "dist": pool[uid] if use_exact else pool[uid][0]}
 	return best
 
 static func _ray_aabb(o: Vector3, d: Vector3, box: AABB):
@@ -718,7 +766,17 @@ static func _ray_aabb(o: Vector3, d: Vector3, box: AABB):
 	return maxf(tmin, 0.0)
 
 # =============================================================== serialization
-func serialize() -> PackedByteArray:
+## Transient visual flags that must never persist in a save (scanner highlight glow).
+const TRANSIENT_FLAGS := 2
+## Slot recorded for a holder that has no player slot (should not happen; restored to the floor).
+const SLOT_LOST := 99
+const MAX_RAW_BYTES := 32 * 1024 * 1024
+
+## `slot_of` (peer id -> player slot) switches to *save mode*: holders and hands are stored as
+## slot + 1 instead of the session's random peer ids and transient flags are dropped. Without it the
+## state is serialized as-is for live network sync.
+func serialize(slot_of := Callable()) -> PackedByteArray:
+	var saving := slot_of.is_valid()
 	var n := items.size()
 	var ints := PackedInt32Array()
 	ints.resize(n * 8)
@@ -728,11 +786,11 @@ func serialize() -> PackedByteArray:
 		var it: Item = items[i]
 		ints[i * 8 + 0] = it.parent
 		ints[i * 8 + 1] = int(it.open)
-		ints[i * 8 + 2] = it.holder
+		ints[i * 8 + 2] = (0 if it.holder == 0 else int(slot_of.call(it.holder)) + 1) if saving else it.holder
 		ints[i * 8 + 3] = it.bucket
 		ints[i * 8 + 4] = it.table
 		ints[i * 8 + 5] = it.stash
-		ints[i * 8 + 6] = it.flags
+		ints[i * 8 + 6] = (it.flags & ~TRANSIENT_FLAGS) if saving else it.flags
 		ints[i * 8 + 7] = 0
 		var x := it.xf
 		var vals := [x.basis.x.x, x.basis.x.y, x.basis.x.z, x.basis.y.x, x.basis.y.y, x.basis.y.z,
@@ -751,8 +809,16 @@ func serialize() -> PackedByteArray:
 	var tbs := []
 	for t in tables:
 		tbs.append(t.occupied)
+	var saved_hands := hands
+	if saving:
+		saved_hands = {}
+		for peer in hands:
+			var k := int(slot_of.call(peer)) + 1
+			if not saved_hands.has(k):
+				saved_hands[k] = []
+			(saved_hands[k] as Array).append_array(hands[peer])
 	var d := {"level": level_id, "seed": seed, "n": n, "ints": ints, "xfs": xfs, "conts": conts,
-		"bks": bks, "sts": sts, "tbs": tbs, "stats": stats, "elapsed": elapsed, "hands": hands}
+		"bks": bks, "sts": sts, "tbs": tbs, "stats": stats, "elapsed": elapsed, "hands": saved_hands}
 	var raw := var_to_bytes(d)
 	var comp := raw.compress(FileAccess.COMPRESSION_ZSTD)
 	var out := PackedByteArray()
@@ -761,13 +827,43 @@ func serialize() -> PackedByteArray:
 	out.append_array(comp)
 	return out
 
-func deserialize(bytes: PackedByteArray) -> bool:
-	if bytes.size() < 4:
-		return false
+## Decodes and structurally validates serialized state without touching anything. {} when invalid.
+static func decode(bytes: PackedByteArray) -> Dictionary:
+	if bytes.size() < 8:
+		return {}
 	var raw_size := bytes.decode_u32(0)
+	if raw_size == 0 or raw_size > MAX_RAW_BYTES:
+		return {}
 	var raw := bytes.slice(4).decompress(raw_size, FileAccess.COMPRESSION_ZSTD)
+	if raw.size() != raw_size:
+		return {}
 	var d = bytes_to_var(raw)
-	if typeof(d) != TYPE_DICTIONARY or int(d.n) != items.size():
+	if typeof(d) != TYPE_DICTIONARY:
+		return {}
+	for k in ["n", "ints", "xfs", "conts", "bks", "sts", "tbs", "stats", "elapsed"]:
+		if not d.has(k):
+			return {}
+	if typeof(d.n) != TYPE_INT or typeof(d.ints) != TYPE_PACKED_INT32_ARRAY or typeof(d.xfs) != TYPE_PACKED_FLOAT32_ARRAY:
+		return {}
+	var n: int = d.n
+	if (d.ints as PackedInt32Array).size() != n * 8 or (d.xfs as PackedFloat32Array).size() != n * 12:
+		return {}
+	if typeof(d.conts) != TYPE_ARRAY or (d.conts as Array).size() != n:
+		return {}
+	for k in ["bks", "sts", "tbs"]:
+		if typeof(d[k]) != TYPE_ARRAY:
+			return {}
+	if typeof(d.stats) != TYPE_DICTIONARY or (typeof(d.elapsed) != TYPE_FLOAT and typeof(d.elapsed) != TYPE_INT):
+		return {}
+	return d
+
+func deserialize(bytes: PackedByteArray) -> bool:
+	var d := decode(bytes)
+	if d.is_empty() or int(d.n) != items.size():
+		return false
+	# sorting tables may be added to / removed from a level layout between versions; shelves and
+	# stashes may not (their contents are part of the level's structure)
+	if (d.bks as Array).size() != buckets.size() or (d.sts as Array).size() != stashes.size():
 		return false
 	var ints: PackedInt32Array = d.ints
 	var xfs: PackedFloat32Array = d.xfs
@@ -791,13 +887,71 @@ func deserialize(bytes: PackedByteArray) -> bool:
 		stashes[si].revealed = d.sts[si][0]
 		stashes[si].items = Array(d.sts[si][1])
 	for ti in tables.size():
-		tables[ti].occupied = d.tbs[ti]
+		tables[ti].occupied = d.tbs[ti] if ti < (d.tbs as Array).size() else {}
 	stats = d.stats
 	elapsed = d.elapsed
 	hands = d.get("hands", {})
+	# items that were standing on a sorting table which this layout no longer has go to the floor
+	for it in items:
+		if it.table >= 0 and (it.table / 100 >= tables.size() or not (tables[it.table / 100].occupied as Dictionary).has(it.table % 100)):
+			it.table = -1
+			var o: Vector3 = it.xf.origin
+			it.xf = Transform3D(it.xf.basis, Vector3(o.x, 0.03, o.z))
+	# slot positions are a pure function of the container, so recompute them: this also repairs the
+	# buried disc positions stored by saves made before the open-case fix
+	for it in items:
+		if (it.kind == Defs.K_CASE or it.kind == Defs.K_CEBOX) and not it.contents.is_empty():
+			for i in it.contents.size():
+				var c: Item = items[it.contents[i]]
+				c.xf = slot_xf(it, c, i)
 	recheck_all()
 	rebuild_index()
 	return true
+
+## After deserialize() of a *save file*: turns the stored holders back into this session's peers and
+## cleans transient flags. `format` is the save format (1 = legacy peer ids, 2 = player slots),
+## `peer_of_slot` maps a player slot to the peer currently playing it, `fallback_xf(uid)` gives a floor
+## transform for an item whose holder is not in this session. Returns the uids put back on the floor.
+func restore_after_load(format: int, peer_of_slot: Dictionary, fallback_xf: Callable) -> Array:
+	var raw_hands := hands
+	hands = {}
+	var released: Array = []
+	for it in items:
+		it.flags &= ~TRANSIENT_FLAGS
+		if it.holder == 0:
+			continue
+		var slot := SLOT_LOST
+		if format >= 2:
+			slot = it.holder - 1
+		elif it.holder == 1:
+			slot = 0    # legacy: peer 1 is always the host
+		var peer: int = peer_of_slot.get(slot, 0)
+		if peer != 0:
+			it.holder = peer
+		else:
+			it.holder = 0
+			it.active = false
+			var xf: Transform3D = fallback_xf.call(it.uid)
+			it.xf = xf
+			released.append(it.uid)
+	# pick-up order: the saved order for each holder, then anything the old order did not list
+	for key in raw_hands:
+		for uid in (raw_hands[key] as Array):
+			if uid >= 0 and uid < items.size() and items[uid].holder != 0:
+				var h: int = items[uid].holder
+				if not hands.has(h):
+					hands[h] = []
+				if not (hands[h] as Array).has(uid):
+					(hands[h] as Array).append(uid)
+	for it in items:
+		if it.holder != 0:
+			if not hands.has(it.holder):
+				hands[it.holder] = []
+			if not (hands[it.holder] as Array).has(it.uid):
+				(hands[it.holder] as Array).append(it.uid)
+	recheck_all()
+	rebuild_index()
+	return released
 
 func checksum() -> int:
 	var h := 0

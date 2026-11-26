@@ -16,6 +16,13 @@ func _ready() -> void:
 		"scripts": preload("res://tests/suite_scripts.gd"),
 		"levels": preload("res://tests/suite_levels.gd"),
 		"gameplay": preload("res://tests/suite_gameplay.gd"),
+		"sweep": preload("res://tests/suite_sweep.gd"),
+		"reg_misc": preload("res://tests/reg_misc.gd"),
+		"reg_targeting": preload("res://tests/reg_targeting.gd"),
+		"reg_world": preload("res://tests/reg_world.gd"),
+		"reg_cart": preload("res://tests/reg_cart.gd"),
+		"reg_saves": preload("res://tests/reg_saves.gd"),
+		"reg_discs": preload("res://tests/reg_discs.gd"),
 	}
 	for name in suites:
 		if suite != "all" and suite != name:

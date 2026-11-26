@@ -108,6 +108,15 @@ func room_at(p: Vector2) -> int:
 			return i
 	return -1
 
+## True while a point is within the playable footprint: inside a room rect, or within `margin`
+## of one (wall thickness + doorway overlap). Used to recover players that end up outside the map.
+func is_inside(p: Vector3, margin := 0.4) -> bool:
+	var q := Vector2(p.x, p.z)
+	for rm in rooms:
+		if (rm.rect as Rect2).grow(margin).has_point(q):
+			return true
+	return false
+
 func is_free(p: Vector3, radius := 0.12, wall_margin := 0.2) -> bool:
 	var r := room_at(Vector2(p.x, p.z))
 	if r < 0:

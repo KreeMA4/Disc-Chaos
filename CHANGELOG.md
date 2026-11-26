@@ -1,5 +1,38 @@
 # Changelog
 
+### v1.0.1
+Critical fixes (audit milestone M1). No gameplay features were added and the item model, level
+generation, catalog and network protocol are unchanged, so v1.0 and v1.0.1 players can still
+share a session. Existing saves keep working.
+- Aiming: items inside a push cart, an open case or an open collector's box can be targeted and
+  picked up again (the container used to shadow its contents). Loose carts no longer turn into
+  tumbling rigid bodies when you walk up to them.
+- Map boundary: storefront and other windows are solid; a recovery guard puts anyone who ends up
+  outside the building (or under the floor) back at their last safe spot.
+- Carts: stop at walls and shelves and slide along them, the pusher is held back behind a blocked
+  cart, a cart is only picked up when there is room in front, and a slip (or any drop) leaves it
+  upright on the floor instead of throwing it into the air.
+- Saves: old or damaged saves never hang the loading screen (clear message + **Discard old save**);
+  v1.0 saves are migrated (backup kept as `level_N.save.v1.bak`); items carried by co-op players at
+  save time are restored to whoever plays that slot, or put back on the floor, instead of being lost;
+  the scanner glow is no longer saved; saves are written atomically and the host autosaves every
+  2.5 minutes when something changed.
+- Co-op: the client timer ticks every frame instead of every 2 seconds.
+- Layout: the level-2 den PC tower sits on its desk. Level validator no longer flags floor items
+  under a desk-top PC.
+- Discs (M1.1): discs are now visible on the tray of an open case (they used to be buried inside the
+  case's back panel, which also made them seem to vanish when put back); "Take out" puts the disc in
+  your hand so it can be inserted elsewhere, dropped or placed immediately (loose only when your hands
+  are full); aiming at a loose disc picks that disc instead of a neighbour in a pile; dropped or thrown
+  items can no longer spawn inside walls or furniture, are rescued the instant they leave the level, and
+  are not frozen in mid-air at the top of a throw.
+- Hands (M1.1): holding and inspecting no longer cross the forearms; opening/closing a case moves both
+  hands symmetrically; emotes are performed by your own first-person hands (no other hands).
+- Bedroom (M1.1): the sorting table in the middle of level 1 is gone (more floor for co-op). Saves that
+  had items on it load fine; those items go to the floor.
+- Tests: regression suites for every fix above (`tools/run_tests.sh reg_*`), a 188-level validator
+  sweep, real v1.0 save fixtures, and a client-clock check in `tools/net_test.sh`.
+
 ### v1.0
 Polish release.
 - Rendering: every case/box format now shares one unit mesh scaled per instance, so the store's

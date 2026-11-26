@@ -199,6 +199,7 @@ func _physics_process(delta: float) -> void:
 	var moved := Vector2(global_position.x - before.x, global_position.z - before.z).length()
 	distance_walked += moved
 	_handle_player_bumps()
+	_guard_bounds()
 	_update_cart_push()
 	# --- crouch eye height, bob, slip tumble
 	var eye := EYE_CROUCH if crouching else EYE
@@ -264,6 +265,9 @@ func start_slip() -> void:
 	Game.on_local_slip(self)
 	# drop everything in a comedic spray
 	for uid in held():
+		if Game.st.items[uid].kind == Defs.K_CART:
+			Game.request_release(uid, CartPhysics.grounded(Game.st.items[uid].xf), Vector3.ZERO, Vector3.ZERO)
+			continue
 		var xf := Transform3D(Basis(Vector3.UP, randf() * TAU), global_position + Vector3(0, 1.0, 0) + transform.basis * Vector3(randf_range(-0.3, 0.3), 0, -0.4))
 		Game.request_release(uid, xf, transform.basis * Vector3(randf_range(-1, 1), 2.5, -2.0), Vector3(randf(), randf(), randf()) * 6.0)
 
@@ -286,6 +290,33 @@ func apply_bump(push: Vector3) -> void:
 	if push.length() > 4.5 and randf() < 0.3:
 		start_slip()
 
+# ------------------------------------------------------------------ out-of-bounds recovery
+var _safe_pos := Vector3.ZERO
+var _safe_set := false
+var oob_recoveries := 0
+
+## Last line of defence: if the player ever ends up outside the map footprint (or falls through
+## the world) they are put back at the last good floor position. Colliders should make this
+## unreachable; this keeps a missed gap from stranding or losing a player.
+func _guard_bounds() -> void:
+	var L: LevelLayout = Game.layout
+	if L == null:
+		return
+	var out := not L.is_inside(global_position) or global_position.y < -2.0 or global_position.y > 12.0
+	if not out:
+		if is_on_floor():
+			_safe_pos = global_position
+			_safe_set = true
+		return
+	var to: Vector3 = Vector3(0, 0.05, 0)
+	if _safe_set:
+		to = _safe_pos
+	elif not L.spawns.is_empty():
+		to = (L.spawns[0] as Vector3) + Vector3(0, 0.05, 0)
+	global_position = to
+	velocity = Vector3.ZERO
+	oob_recoveries += 1
+
 # ------------------------------------------------------------------ carts
 var _cart_exception := -1
 
@@ -296,7 +327,15 @@ func pushing_cart() -> int:
 	return -1
 
 func cart_xf() -> Transform3D:
-	return Transform3D(Basis(Vector3.UP, look_yaw), global_position + Basis(Vector3.UP, look_yaw) * Vector3(0, 0, -0.95))
+	return CartPhysics.pose_for(global_position, look_yaw)
+
+## Grab through here so a cart is only taken when there is room for it in front of the player.
+func _request_grab(uid: int) -> void:
+	var it: LevelState.Item = Game.st.items[uid]
+	if it.kind == Defs.K_CART and CartPhysics.blocked(get_world_3d().direct_space_state, cart_xf()):
+		Game.toast("No room for the cart here")
+		return
+	Game.request_grab(uid)
 
 func _update_cart_push() -> void:
 	var c := pushing_cart()
@@ -307,7 +346,15 @@ func _update_cart_push() -> void:
 			add_collision_exception_with(Game.carts[c].body)
 		_cart_exception = c
 	if c >= 0:
-		Game.local_cart_move(c, cart_xf())
+		var cur: Transform3D = Game.st.items[c].xf
+		var want := cart_xf()
+		var got := CartPhysics.resolve(get_world_3d().direct_space_state, cur, want)
+		if not got.origin.is_equal_approx(want.origin) and got.origin.distance_to(want.origin) < 0.6:
+			# the cart is blocked (wall, shelf): the pusher stays behind it instead of walking through
+			var off := global_position - want.origin
+			var back := got.origin + off
+			global_position = Vector3(back.x, global_position.y, back.z)
+		Game.local_cart_move(c, got)
 
 # ------------------------------------------------------------------ targeting
 func _ray() -> Array:
@@ -477,7 +524,7 @@ func _actions(delta: float) -> void:
 			inspecting = true
 			inspect_rot = Basis(Vector3.UP, PI * 0.1)
 		elif target.get("type") == "item":
-			Game.request_grab(target.uid)
+			_request_grab(target.uid)
 			_pending_inspect = true
 	if _pending_inspect and top >= 0:
 		_pending_inspect = false
@@ -504,7 +551,7 @@ func _actions(delta: float) -> void:
 			var power := lerpf(3.0, 8.5, throw_charge)
 			throw_charge = -1.0
 			if top >= 0:
-				var xf := hold_point.global_transform
+				var xf := _safe_xf(hold_point.global_transform)
 				var vel := -camera.global_transform.basis.z * power + Vector3(0, 1.2, 0) + velocity * 0.5
 				Game.request_release(top, xf, vel, Vector3(randf_range(-4, 4), randf_range(-8, 8), randf_range(-4, 4)))
 				Game.on_local_throw()
@@ -520,7 +567,7 @@ func _do_grab() -> void:
 	var tt: String = target.get("type", "")
 	if top < 0:
 		if tt == "item" and st.items[target.uid].kind != Defs.K_CART:
-			Game.request_grab(target.uid)
+			_request_grab(target.uid)
 			hands.punch()
 		return
 	var hi: LevelState.Item = st.items[top]
@@ -545,7 +592,7 @@ func _do_grab() -> void:
 			elif (ti.open or ti.kind == Defs.K_CART) and st.can_insert(top, uid):
 				Game.request_insert(top, uid)
 			elif _stackable(hi) and _stackable(ti) and held().size() < MAX_STACK:
-				Game.request_grab(uid)
+				_request_grab(uid)
 			else:
 				_drop(top)
 			hands.punch()
@@ -555,8 +602,22 @@ func _do_grab() -> void:
 func _drop(uid: int) -> void:
 	var xf := hold_point.global_transform
 	xf.origin += -camera.global_transform.basis.z * 0.15
-	Game.request_release(uid, xf, velocity * 0.6 + Vector3(0, 0.4, 0), Vector3.ZERO)
+	Game.request_release(uid, _safe_xf(xf), velocity * 0.6 + Vector3(0, 0.4, 0), Vector3.ZERO)
 	inspecting = false
+
+## A release/throw/eject spawn point must never be inside or behind a wall or solid furniture (the
+## hold point is half a metre in front of the eyes, so standing against a wall puts it beyond the wall):
+## if something solid lies between the eyes and the point, the point is pulled back in front of it.
+func _safe_xf(xf: Transform3D) -> Transform3D:
+	var from := camera.global_position
+	var to := xf.origin
+	if from.distance_to(to) < 0.01:
+		return xf
+	var q := PhysicsRayQueryParameters3D.create(from, to, Defs.LAYER_WORLD)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if not hit.is_empty():
+		xf.origin = hit.position - (to - from).normalized() * 0.12
+	return xf
 
 func _do_interact() -> void:
 	var st := Game.st
@@ -570,9 +631,10 @@ func _do_interact() -> void:
 			if hi.open and not hi.contents.is_empty() and target.get("type") != "item":
 				var out := hold_point.global_transform
 				out.origin += -camera.global_transform.basis.z * 0.25 + Vector3(0, 0.1, 0)
-				Game.request_eject(top, out)
+				Game.request_eject(top, _safe_xf(out))
 			else:
 				Game.request_open(top, not hi.open)
+				hands.open_close(not hi.open)
 		elif hi.kind == Defs.K_DISC:
 			inspect_rot = Basis(Vector3.RIGHT, PI) * inspect_rot
 			Sfx.play("flip", global_position)
@@ -581,11 +643,12 @@ func _do_interact() -> void:
 		"item":
 			var ti: LevelState.Item = st.items[target.uid]
 			if ti.kind == Defs.K_CART:
-				Game.request_grab(target.uid)
+				_request_grab(target.uid)
 			elif ti.kind == Defs.K_DISC and ti.parent < 0:
 				Game.request_flip(target.uid)
 			elif ti.kind == Defs.K_CASE or ti.kind == Defs.K_CEBOX:
 				Game.request_open(target.uid, not ti.open)
+				hands.open_close(not ti.open)
 		"stash":
 			Game.request_reveal(target.stash)
 
@@ -624,6 +687,8 @@ func _update_held_visual(delta: float) -> void:
 	if _held_vis:
 		var target_pos := Vector3(0.0, -0.2, -0.5)
 		var target_b := Basis()
+		if hands.is_emoting():
+			target_pos = Vector3(0.0, -0.42, -0.4)   # the item dips out of the way while the hands gesture
 		if inspecting:
 			target_pos = Vector3(0, -0.07, -0.36)
 			target_b = inspect_rot

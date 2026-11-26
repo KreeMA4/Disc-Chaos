@@ -52,6 +52,14 @@ func _card(d: Dictionary, col: Color, main: Node) -> Control:
 		return p
 	if Game.has_save(d.id):
 		v.add_child(UIKit.button("Continue", UIKit.GREEN, func(): _start(d.id, true, main), 30, 80))
+	elif Game.has_save_file(d.id):
+		# a save that this version cannot continue: keep it on disk, explain, and let the player discard it
+		var note := UIKit.vbox(6)
+		note.add_child(UIKit.label(Game.save_info(d.id).message, 20, UIKit.INK.lerp(Color.WHITE, 0.2)))
+		note.add_child(UIKit.button("Discard old save", UIKit.RED, func():
+			Game.delete_save(d.id)
+			note.queue_free(), 24, 60))
+		v.add_child(note)
 	v.add_child(UIKit.button("Play" if arg == "solo" else "Select", col, func(): _start(d.id, false, main), 34, 84))
 	return p
 

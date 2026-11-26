@@ -39,6 +39,10 @@ var scanner_cd := 0.0
 var _snap_t := 0.0
 var _state_t := 0.0
 var _time_sync_t := 0.0
+const AUTOSAVE_SECONDS := 150.0
+var _autosave_t := AUTOSAVE_SECONDS
+var _last_saved_ck := 0
+var last_resume_error := ""
 var _bucket_grid := {}
 var _scanner_marker: MeshInstance3D
 var _highlighted := -1
@@ -58,14 +62,21 @@ func is_host() -> bool:
 
 # ======================================================================== level lifecycle
 ## Host / solo: start a level and tell clients to load it.
-func host_start_level(id: int, seed := -1, resume_bytes := PackedByteArray()) -> void:
+## Returns false only when `resume_bytes` was given but could not be applied; the level is then
+## running from a fresh state with the same seed (nothing was half-restored).
+func host_start_level(id: int, seed := -1, resume_bytes := PackedByteArray(), save_format := SaveMigration.FORMAT) -> bool:
 	if seed < 0:
 		seed = randi() % 100000 + 1
 	if multiplayer.has_multiplayer_peer() and multiplayer.get_peers().size() > 0:
 		ev_load_level.rpc(id, seed, Settings.get_value("warehouse_items"))
 	await load_level(id, seed, Settings.get_value("warehouse_items"))
+	var restored := true
 	if resume_bytes.size() > 0:
-		st.deserialize(resume_bytes)
+		restored = st.deserialize(resume_bytes)
+		if restored:
+			var released := st.restore_after_load(save_format, _peer_of_slot(), _release_xf)
+			if not released.is_empty():
+				toast("%d item%s put back on the floor" % [released.size(), "" if released.size() == 1 else "s"])
 		world.clear_all()
 		for it in st.items:
 			world._dirty[it.uid] = true
@@ -74,6 +85,9 @@ func host_start_level(id: int, seed := -1, resume_bytes := PackedByteArray()) ->
 		if multiplayer.has_multiplayer_peer() and multiplayer.get_peers().size() > 0:
 			ev_full_state.rpc(st.serialize(), _active_list())
 	# give clients the authoritative state once they finished loading (they ask via srv_ready)
+	_autosave_t = AUTOSAVE_SECONDS
+	_last_saved_ck = st.checksum()   # the starting state counts as saved: autosave waits for a change
+	return restored
 
 @rpc("authority", "call_remote", "reliable")
 func ev_load_level(id: int, seed: int, wh_items: int) -> void:
@@ -218,8 +232,10 @@ func on_peer_left(peer: int) -> void:
 func _process(delta: float) -> void:
 	if not running or st == null:
 		return
+	if not finished:
+		st.elapsed += delta   # every peer keeps its own clock between host syncs (see ev_time)
 	if is_host() and not finished:
-		st.elapsed += delta
+		autosave_if_due(delta)
 		_time_sync_t -= delta
 		if _time_sync_t <= 0.0 and multiplayer.has_multiplayer_peer() and multiplayer.get_peers().size() > 0:
 			_time_sync_t = 2.0
@@ -258,7 +274,8 @@ func _process(delta: float) -> void:
 @rpc("authority", "call_remote", "unreliable_ordered")
 func ev_time(t: float) -> void:
 	if st:
-		st.elapsed = t
+		# the local clock already advanced since the last sync: correct it, snapping only on big jumps
+		st.elapsed = t if absf(st.elapsed - t) > 1.0 else lerpf(st.elapsed, t, 0.5)
 
 @rpc("authority", "call_remote", "unreliable")
 func ev_snap(uids: PackedInt32Array, data: PackedFloat32Array) -> void:
@@ -489,6 +506,8 @@ func ev_grab(uid: int, peer: int) -> void:
 func ev_release(uid: int, xf: Transform3D, vel: Vector3, ang: Vector3, peer: int) -> void:
 	if st == null:
 		return
+	if st.items[uid].kind == Defs.K_CART:
+		xf = CartPhysics.grounded(xf)   # a cart is always put down upright on the floor
 	st.op_release(uid, xf)
 	if st.items[uid].kind == Defs.K_CART:
 		Sfx.play("thud", xf.origin)
@@ -517,10 +536,17 @@ func ev_insert(child: int, cont: int, peer: int) -> void:
 func ev_eject(cont: int, out_xf: Transform3D, peer: int) -> void:
 	if st == null:
 		return
-	var c := st.op_eject(cont, 0, out_xf)
+	# "Take out" puts the item into the hands of the player who did it (on top of what they carry),
+	# so it can be inserted elsewhere, dropped or placed right away. Only when their hands are full
+	# does it become a loose item in front of them.
+	var to_hand: bool = peer != 0 and st.held_by(peer).size() < Player.MAX_STACK
+	var c := st.op_eject(cont, peer if to_hand else 0, out_xf)
 	world.refresh_visual(cont)
 	if c >= 0:
-		world.activate(c, out_xf, (out_xf.basis.z * -0.3) + Vector3(0, 1.0, 0))
+		if not to_hand:
+			world.activate(c, out_xf, (out_xf.basis.z * -0.3) + Vector3(0, 1.0, 0))
+		else:
+			world._dirty[c] = true
 		Sfx.play("pop", out_xf.origin)
 
 @rpc("authority", "call_local", "reliable")
@@ -611,6 +637,7 @@ func ev_bump(target: int, push: Vector3, from: int) -> void:
 func ev_emote(peer: int, e: String) -> void:
 	if peer == me() and local_player:
 		local_player.bean.play_emote(e)
+		local_player.hands.play_emote(e)   # the hands the player actually sees do the gesture
 	elif remotes.has(peer):
 		remotes[peer].bean.play_emote(e)
 	Sfx.play("emote", _player_pos(peer))
@@ -914,40 +941,108 @@ func _haptic(ms: int) -> void:
 		Input.vibrate_handheld(ms)
 
 # ======================================================================== save / resume
-func save_path(level_id: int) -> String:
-	return "user://saves/level_%d.save" % level_id
+var save_dir := "user://saves"   # tests point this at a scratch folder
 
-func save_game() -> bool:
+func save_path(level_id: int) -> String:
+	return "%s/level_%d.save" % [save_dir, level_id]
+
+## Player slot of a peer, for save files (host = 0).
+func _slot_of_peer(peer: int) -> int:
+	if Net.players.has(peer):
+		return Net.player_index(peer)
+	if peer == me():
+		return 0
+	return LevelState.SLOT_LOST
+
+## Slot -> peer for everyone in this session (the host is always slot 0).
+func _peer_of_slot() -> Dictionary:
+	var out := {0: me()}
+	for peer in Net.players:
+		out[Net.player_index(peer)] = peer
+	return out
+
+## Where an item goes when its holder is not in the session: where it was picked up if that is a sane
+## spot inside the level, else beside the first spawn point. Carts are always put down upright.
+func _release_xf(uid: int) -> Transform3D:
+	var it: LevelState.Item = st.items[uid]
+	var xf := it.xf
+	var o := xf.origin
+	var ok: bool = layout != null and layout.is_inside(o, 0.0) and o.y > -0.05 and o.y < 3.0
+	if not ok:
+		var sp := Vector3.ZERO
+		if layout != null and not layout.spawns.is_empty():
+			sp = layout.spawns[0]
+		xf = Transform3D(Basis(), sp + Vector3(0.0, 0.15, 0.0))
+	if it.kind == Defs.K_CART:
+		xf = CartPhysics.grounded(xf)
+	return xf
+
+func save_game(silent := false) -> bool:
 	if not is_host() or st == null:
 		return false
-	DirAccess.make_dir_recursive_absolute("user://saves")
-	var f := FileAccess.open(save_path(level_def.id), FileAccess.WRITE)
-	if f == null:
+	DirAccess.make_dir_recursive_absolute(save_dir)
+	var path := save_path(level_def.id)
+	var d := {"level": level_def.id, "seed": level_seed, "state": st.serialize(Callable(self, "_slot_of_peer")),
+		"version": Defs.CATALOG_VERSION, "format": SaveMigration.FORMAT,
+		"wh": Settings.get_value("warehouse_items"), "date": Time.get_datetime_string_from_system()}
+	if not SaveMigration.write_atomic(path, d):
+		if not silent:
+			toast("Could not save the game")
 		return false
-	f.store_var({"level": level_def.id, "seed": level_seed, "state": st.serialize(), "version": Defs.CATALOG_VERSION,
-		"wh": Settings.get_value("warehouse_items"), "date": Time.get_datetime_string_from_system()})
-	toast("Game saved")
+	_last_saved_ck = st.checksum()
+	if not silent:
+		toast("Game saved")
 	return true
 
+## Periodic autosave (host only): every AUTOSAVE_SECONDS, and only if the items changed since the
+## last save. Returns true when a save was written.
+func autosave_if_due(delta: float) -> bool:
+	if st == null or not running or finished or not is_host():
+		return false
+	_autosave_t -= delta
+	if _autosave_t > 0.0:
+		return false
+	_autosave_t = AUTOSAVE_SECONDS
+	if st.checksum() == _last_saved_ck:
+		return false
+	return save_game(true)
+
+## Header-level information about the save of a level (see SaveMigration.read).
+func save_info(level_id: int) -> Dictionary:
+	return SaveMigration.read(save_path(level_id))
+
+## True when a save exists AND can be continued. Incompatible files are kept on disk but not offered.
 func has_save(level_id: int) -> bool:
+	return SaveMigration.is_resumable(save_info(level_id))
+
+## True when there is a save file of any kind (used to offer discarding an unusable one).
+func has_save_file(level_id: int) -> bool:
 	return FileAccess.file_exists(save_path(level_id))
 
 func load_save(level_id: int) -> Dictionary:
-	var f := FileAccess.open(save_path(level_id), FileAccess.READ)
-	if f == null:
-		return {}
-	var d = f.get_var()
-	if typeof(d) != TYPE_DICTIONARY or int(d.get("version", 0)) != Defs.CATALOG_VERSION:
-		return {}
-	return d
+	var info := save_info(level_id)
+	return info.data if SaveMigration.is_resumable(info) else {}
 
 func delete_save(level_id: int) -> void:
-	if has_save(level_id):
+	if has_save_file(level_id):
 		DirAccess.remove_absolute(save_path(level_id))
 
-func resume(level_id: int) -> void:
-	var d := load_save(level_id)
-	if d.is_empty():
-		return
-	Settings.values["warehouse_items"] = d.get("wh", 400)
-	await host_start_level(level_id, int(d.seed), d.state)
+## Continues a saved level. Validates the header first and returns false (without loading anything)
+## if the save cannot be continued; `last_resume_error` then says why.
+func resume(level_id: int) -> bool:
+	last_resume_error = ""
+	var info := save_info(level_id)
+	if not SaveMigration.is_resumable(info):
+		last_resume_error = info.message
+		return false
+	var d: Dictionary = info.data
+	if info.status == SaveMigration.Status.LEGACY:
+		SaveMigration.backup_legacy(save_path(level_id))
+	Settings.values["warehouse_items"] = clampi(int(d.get("wh", 400)), 100, 2000)
+	var ok: bool = await host_start_level(level_id, int(d.seed), d.state, int(info.format))
+	if not ok:
+		toast("The save was damaged, so a new game was started")
+		last_resume_error = "damaged"
+	elif info.status == SaveMigration.Status.LEGACY:
+		save_game(true)   # rewrite as format 2 (the original stays as level_N.save.v1.bak)
+	return ok
