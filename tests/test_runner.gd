@@ -22,6 +22,7 @@ func _ready() -> void:
 		"reg_world": preload("res://tests/reg_world.gd"),
 		"reg_cart": preload("res://tests/reg_cart.gd"),
 		"reg_saves": preload("res://tests/reg_saves.gd"),
+		"reg_discs": preload("res://tests/reg_discs.gd"),
 	}
 	for name in suites:
 		if suite != "all" and suite != name:

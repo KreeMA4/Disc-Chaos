@@ -20,6 +20,16 @@ share a session. Existing saves keep working.
 - Co-op: the client timer ticks every frame instead of every 2 seconds.
 - Layout: the level-2 den PC tower sits on its desk. Level validator no longer flags floor items
   under a desk-top PC.
+- Discs (M1.1): discs are now visible on the tray of an open case (they used to be buried inside the
+  case's back panel, which also made them seem to vanish when put back); "Take out" puts the disc in
+  your hand so it can be inserted elsewhere, dropped or placed immediately (loose only when your hands
+  are full); aiming at a loose disc picks that disc instead of a neighbour in a pile; dropped or thrown
+  items can no longer spawn inside walls or furniture, are rescued the instant they leave the level, and
+  are not frozen in mid-air at the top of a throw.
+- Hands (M1.1): holding and inspecting no longer cross the forearms; opening/closing a case moves both
+  hands symmetrically; emotes are performed by your own first-person hands (no other hands).
+- Bedroom (M1.1): the sorting table in the middle of level 1 is gone (more floor for co-op). Saves that
+  had items on it load fine; those items go to the floor.
 - Tests: regression suites for every fix above (`tools/run_tests.sh reg_*`), a 188-level validator
   sweep, real v1.0 save fixtures, and a client-clock check in `tools/net_test.sh`.
 

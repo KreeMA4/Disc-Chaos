@@ -106,7 +106,8 @@ static func _bedroom(L: LevelLayout, rng: RandomNumberGenerator) -> void:
 	L.add_shelf_slot(Vector3(0.16, 0, 2.05), 90, "case_shelf")
 	L.add_shelf_slot(Vector3(0.16, 0, 3.3), 90, "case_shelf")
 	L.add_shelf_slot(Vector3(3.55, 0, 0.16), 0, "case_shelf")
-	L.add_sort_table(Vector3(3.3, 0, 2.2), 0)
+	# (the sorting table that stood in the middle of the bedroom was removed: the room needs open floor
+	# for several players; sorting works with the shelves and the floor)
 	# wall decor
 	L.add_prop("string_lights", Vector3(1.25, 2.25, 0.05), 0, {"len": 2.4})
 	L.add_prop("string_lights", Vector3(W - 0.05, 2.3, 3.0), -90, {"len": 3.6})

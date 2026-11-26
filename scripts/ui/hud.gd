@@ -186,7 +186,10 @@ func _process(_d: float) -> void:
 	if p.inspecting:
 		hint = ""
 	elif held.size() > 1:
-		hint = "Carrying %d cases" % held.size()
+		var all_cases := true
+		for u in held:
+			all_cases = all_cases and Game.st.items[u].kind == Defs.K_CASE
+		hint = "Carrying %d %s" % [held.size(), "cases" if all_cases else "items"]
 	elif ctx.grab != "" and DisplayServer.is_touchscreen_available() == false:
 		hint = "[E] %s%s" % [ctx.grab, ("   [F] %s" % ctx.interact) if ctx.interact != "" else ""]
 	hint_lbl.text = hint

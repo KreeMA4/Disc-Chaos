@@ -26,6 +26,9 @@ var _anim := {}                  # uid -> {from: Transform3D, t: float}
 var bodies := {}                 # uid -> RigidBody3D (host)
 var puppets := {}                # uid -> {node: Node3D, target: Transform3D}
 var _act_timer := 0.0
+var _last_ok := {}               # uid -> last position above the floor and inside the level
+var _still := {}                 # uid -> seconds the body has been (nearly) motionless
+var rescued := 0                 # bodies put back after leaving the level (diagnostics / tests)
 var _shadows := true
 var _vis_range := 40.0
 var _phys_mat: PhysicsMaterial
@@ -71,12 +74,23 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if not is_host or st == null:
 		return
-	for uid in bodies:
+	for uid in bodies.keys():
 		var b: RigidBody3D = bodies[uid]
 		if not b.sleeping:
-			st.op_move(uid, b.global_transform)
-			if b.global_position.y < -3.0:
+			var pos := b.global_position
+			# keep the last position that was above the floor inside the level; a body that ever
+			# leaves it (tunnelled through geometry, spawned in a wall) is put straight back there
+			# instead of falling for seconds and teleporting to a player
+			if pos.y > -0.15 and (Game.layout == null or Game.layout.is_inside(pos, 0.3)):
+				_last_ok[uid] = pos
+			elif _last_ok.has(uid) or pos.y < -3.0:
 				_rescue(uid, b)
+				continue
+			st.op_move(uid, b.global_transform)
+			if b.linear_velocity.length() < 0.05 and b.angular_velocity.length() < 0.2:
+				_still[uid] = float(_still.get(uid, 0.0)) + delta
+			else:
+				_still[uid] = 0.0
 	_act_timer -= delta
 	if _act_timer <= 0.0:
 		_act_timer = 0.2
@@ -84,8 +98,14 @@ func _physics_process(delta: float) -> void:
 
 func _rescue(uid: int, b: RigidBody3D) -> void:
 	var p: Vector3 = players[0] if not players.is_empty() else Vector3(0, 1, 0)
-	b.global_position = p + Vector3(0, 1.0, 0.5)
+	if _last_ok.has(uid):
+		b.global_position = (_last_ok[uid] as Vector3) + Vector3(0, 0.05, 0)
+	else:
+		b.global_position = p + Vector3(0, 1.0, 0.5)
 	b.linear_velocity = Vector3.ZERO
+	b.angular_velocity = Vector3.ZERO
+	st.op_move(uid, b.global_transform)
+	rescued += 1
 
 # ------------------------------------------------------------------ static rendering
 func _flush() -> void:
@@ -312,6 +332,8 @@ func _deactivate_node(uid: int) -> void:
 		st.op_move(uid, b.global_transform)
 		b.queue_free()
 		bodies.erase(uid)
+		_last_ok.erase(uid)
+		_still.erase(uid)
 	if puppets.has(uid):
 		puppets[uid].node.queue_free()
 		puppets.erase(uid)
@@ -364,7 +386,9 @@ func _update_activation() -> void:
 	# deactivate sleeping bodies out of range
 	for uid in bodies.keys():
 		var b: RigidBody3D = bodies[uid]
-		if (b.sleeping or b.linear_velocity.length() < 0.02) and not want.has(uid):
+		# freeze only bodies that really came to rest: a thrown item has ~zero speed at the top of its
+		# arc and used to be frozen in mid-air there
+		if (b.sleeping or float(_still.get(uid, 0.0)) > 0.8) and not want.has(uid):
 			var far := true
 			for p in players:
 				if b.global_position.distance_to(p) < ACTIVATE_R + 1.0:

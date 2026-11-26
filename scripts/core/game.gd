@@ -536,10 +536,17 @@ func ev_insert(child: int, cont: int, peer: int) -> void:
 func ev_eject(cont: int, out_xf: Transform3D, peer: int) -> void:
 	if st == null:
 		return
-	var c := st.op_eject(cont, 0, out_xf)
+	# "Take out" puts the item into the hands of the player who did it (on top of what they carry),
+	# so it can be inserted elsewhere, dropped or placed right away. Only when their hands are full
+	# does it become a loose item in front of them.
+	var to_hand: bool = peer != 0 and st.held_by(peer).size() < Player.MAX_STACK
+	var c := st.op_eject(cont, peer if to_hand else 0, out_xf)
 	world.refresh_visual(cont)
 	if c >= 0:
-		world.activate(c, out_xf, (out_xf.basis.z * -0.3) + Vector3(0, 1.0, 0))
+		if not to_hand:
+			world.activate(c, out_xf, (out_xf.basis.z * -0.3) + Vector3(0, 1.0, 0))
+		else:
+			world._dirty[c] = true
 		Sfx.play("pop", out_xf.origin)
 
 @rpc("authority", "call_local", "reliable")
@@ -630,6 +637,7 @@ func ev_bump(target: int, push: Vector3, from: int) -> void:
 func ev_emote(peer: int, e: String) -> void:
 	if peer == me() and local_player:
 		local_player.bean.play_emote(e)
+		local_player.hands.play_emote(e)   # the hands the player actually sees do the gesture
 	elif remotes.has(peer):
 		remotes[peer].bean.play_emote(e)
 	Sfx.play("emote", _player_pos(peer))
