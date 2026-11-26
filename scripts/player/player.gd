@@ -551,7 +551,7 @@ func _actions(delta: float) -> void:
 			var power := lerpf(3.0, 8.5, throw_charge)
 			throw_charge = -1.0
 			if top >= 0:
-				var xf := hold_point.global_transform
+				var xf := _safe_xf(hold_point.global_transform)
 				var vel := -camera.global_transform.basis.z * power + Vector3(0, 1.2, 0) + velocity * 0.5
 				Game.request_release(top, xf, vel, Vector3(randf_range(-4, 4), randf_range(-8, 8), randf_range(-4, 4)))
 				Game.on_local_throw()
@@ -602,8 +602,22 @@ func _do_grab() -> void:
 func _drop(uid: int) -> void:
 	var xf := hold_point.global_transform
 	xf.origin += -camera.global_transform.basis.z * 0.15
-	Game.request_release(uid, xf, velocity * 0.6 + Vector3(0, 0.4, 0), Vector3.ZERO)
+	Game.request_release(uid, _safe_xf(xf), velocity * 0.6 + Vector3(0, 0.4, 0), Vector3.ZERO)
 	inspecting = false
+
+## A release/throw/eject spawn point must never be inside or behind a wall or solid furniture (the
+## hold point is half a metre in front of the eyes, so standing against a wall puts it beyond the wall):
+## if something solid lies between the eyes and the point, the point is pulled back in front of it.
+func _safe_xf(xf: Transform3D) -> Transform3D:
+	var from := camera.global_position
+	var to := xf.origin
+	if from.distance_to(to) < 0.01:
+		return xf
+	var q := PhysicsRayQueryParameters3D.create(from, to, Defs.LAYER_WORLD)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if not hit.is_empty():
+		xf.origin = hit.position - (to - from).normalized() * 0.12
+	return xf
 
 func _do_interact() -> void:
 	var st := Game.st
@@ -617,9 +631,10 @@ func _do_interact() -> void:
 			if hi.open and not hi.contents.is_empty() and target.get("type") != "item":
 				var out := hold_point.global_transform
 				out.origin += -camera.global_transform.basis.z * 0.25 + Vector3(0, 0.1, 0)
-				Game.request_eject(top, out)
+				Game.request_eject(top, _safe_xf(out))
 			else:
 				Game.request_open(top, not hi.open)
+				hands.open_close(not hi.open)
 		elif hi.kind == Defs.K_DISC:
 			inspect_rot = Basis(Vector3.RIGHT, PI) * inspect_rot
 			Sfx.play("flip", global_position)
@@ -633,6 +648,7 @@ func _do_interact() -> void:
 				Game.request_flip(target.uid)
 			elif ti.kind == Defs.K_CASE or ti.kind == Defs.K_CEBOX:
 				Game.request_open(target.uid, not ti.open)
+				hands.open_close(not ti.open)
 		"stash":
 			Game.request_reveal(target.stash)
 
@@ -671,6 +687,8 @@ func _update_held_visual(delta: float) -> void:
 	if _held_vis:
 		var target_pos := Vector3(0.0, -0.2, -0.5)
 		var target_b := Basis()
+		if hands.is_emoting():
+			target_pos = Vector3(0.0, -0.42, -0.4)   # the item dips out of the way while the hands gesture
 		if inspecting:
 			target_pos = Vector3(0, -0.07, -0.36)
 			target_b = inspect_rot
