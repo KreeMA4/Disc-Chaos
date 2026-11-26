@@ -425,6 +425,14 @@ func _multi_peer_eject() -> void:
 	await TestUtil.frames(get_tree(), 40)
 	runner.check(st.items[disc].holder == 0 and Game.world.bodies.has(disc), "2: peer 7 drops it: loose again")
 	runner.check(st.op_grab(disc, 8) and st.held_by(8) == [disc], "2: peer 8 can now pick it up")
+	# a player who leaves while holding a taken-out disc drops it (never lost, never stuck on a dead peer id)
+	Game.ev_release(disc, Transform3D(Basis(), Vector3(2.5, 0.3, 2)), Vector3.ZERO, Vector3.ZERO, 8)
+	await TestUtil.frames(get_tree(), 5)
+	st.op_grab(disc, 9)
+	Game.on_peer_left(9)
+	await TestUtil.frames(get_tree(), 5)
+	runner.check(st.items[disc].holder == 0 and st.held_by(9).is_empty(), "2: when a player leaves, the disc in their hands is dropped (held by nobody)")
+	st.op_grab(disc, 8)
 	# the serialized state a late joiner receives has the right owner
 	var bytes := st.serialize()
 	var other: LevelState = TestUtil.fresh(1, 1234)[2]

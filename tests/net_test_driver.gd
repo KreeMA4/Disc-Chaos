@@ -38,7 +38,15 @@ func _host() -> void:
 	while not (Net.players.size() >= 2 and Net.all_ready()):
 		await _wait(0.2)
 	_l("starting with %d players" % Net.players.size())
-	Game.main.host_start(1)
+	var forced_seed := -1   # --nettest-seed=N replays one level seed (see NET_SEED in tools/net_test.sh)
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--nettest-seed="):
+			forced_seed = int(a.substr(15))
+	if forced_seed > 0:
+		Game.main._begin_loading()
+		Game.host_start_level(1, forced_seed)
+	else:
+		Game.main.host_start(1)
 	await Game.level_loaded
 	await _wait(4.0)
 	await _solve_index(0)
@@ -96,7 +104,13 @@ func _client() -> void:
 	if Game.st.items[contested].holder == Game.me():
 		Game.request_release(contested, Transform3D(Basis(), Game.local_player.global_position + Vector3(0, 1, 0)), Vector3.ZERO, Vector3.ZERO)
 	await _until(40.0)
-	_finish("DONE")
+	# Stay connected until every role has taken its snapshot. A client that quits right after writing
+	# its result is a "player left": the host then (correctly) drops whatever it was holding, which
+	# changed the host's/late joiner's state relative to this client's earlier snapshot. That race
+	# existed before but only showed up once a client could end holding an item (Take out).
+	_finish("DONE", false)
+	await _wait(8.0)
+	get_tree().quit(0)
 
 func _until(t: float) -> void:
 	while Game.st == null or Game.st.elapsed < t:
@@ -207,8 +221,19 @@ func _finish(status: String, quit := true) -> void:
 			if it.holder != 0:
 				held.append("%d:%d" % [it.uid, it.holder])
 		lines.append("held=%s" % ",".join(held))
+	if st:
+		lines.append("elapsed=%.2f" % st.elapsed)
 	lines.append_array(log_lines)
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://tests/out"))
+	# failure diagnostics: per-item state so a checksum mismatch can be traced to exact items
+	if st:
+		var dump := FileAccess.open("res://tests/out/net_%s_items.txt" % role, FileAccess.WRITE)
+		for it in st.items:
+			dump.store_line("uid=%d kind=%d parent=%d holder=%d bucket=%d table=%d stash=%d open=%d contents=%s" % [it.uid, it.kind, it.parent, it.holder, it.bucket, it.table, it.stash, int(it.open), str(Array(it.contents))])
+		for b in st.buckets:
+			dump.store_line("bucket=%d items=%s" % [b.id, str(Array(b.items))])
+		dump.store_line("hands=%s" % str(st.hands))
+		dump.close()
 	var f := FileAccess.open("res://tests/out/net_%s.txt" % role, FileAccess.WRITE)
 	f.store_string("\n".join(lines))
 	f.close()
